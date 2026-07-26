@@ -1,0 +1,44 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import JournalEntryCard from '../../components/content/JournalEntryCard.astro';
+import { getPublishedJournalEntries } from '../../lib/collections';
+
+const entries = await getPublishedJournalEntries();
+---
+
+<BaseLayout
+  title="Journal"
+  description="A chronological engineering log — what I worked on, what got in the way, and what I learned, roughly week by week."
+>
+  <div class="page-container">
+    <header class="page-header">
+      <h1>Journal</h1>
+      <p>Weekly engineering updates, in the order they happened.</p>
+    </header>
+    <div class="journal-list">
+      {entries.map((entry) => <JournalEntryCard entry={entry} />)}
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 42rem;
+    margin-inline: auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .page-header {
+    margin-bottom: 1.5rem;
+  }
+
+  .page-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.75rem;
+  }
+
+  .page-header p {
+    margin: 0;
+    color: var(--color-fg-muted);
+  }
+</style>

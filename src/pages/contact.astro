@@ -1,0 +1,16 @@
+---
+import PageLayout from '../layouts/PageLayout.astro';
+import { site } from '../data/site';
+---
+
+<PageLayout title="Contact" description="Get in touch.">
+  <p>
+    The most reliable way to reach me is email:
+    {' '}<a href={`mailto:${site.socials.email}`}>{site.socials.email}</a>.
+  </p>
+  <p>
+    I'm also on <a href={site.socials.github} rel="noopener noreferrer" target="_blank">GitHub</a> —
+    that's the best place to see what I'm actively working on, or to open
+    an issue/PR against anything linked from this site.
+  </p>
+</PageLayout>

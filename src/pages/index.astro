@@ -1,0 +1,160 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ProjectCard from '../components/content/ProjectCard.astro';
+import JournalEntryCard from '../components/content/JournalEntryCard.astro';
+import NoteCard from '../components/content/NoteCard.astro';
+import GitHubActivityFeed from '../components/content/GitHubActivityFeed.astro';
+import { getPublishedProjects, getPublishedJournalEntries, getPublishedNotes } from '../lib/collections';
+import { site } from '../data/site';
+
+const [projects, journalEntries, notes] = await Promise.all([
+  getPublishedProjects(),
+  getPublishedJournalEntries(),
+  getPublishedNotes(),
+]);
+
+const featuredProjects = projects.slice(0, 2);
+const recentJournal = journalEntries.slice(0, 3);
+const recentNotes = notes.slice(0, 4);
+---
+
+<BaseLayout title={site.title} description={site.description}>
+  <div class="page-container">
+    <section class="intro">
+      <p class="eyebrow">{site.tagline}</p>
+      <h1>{site.author}</h1>
+      <p class="intro-description">{site.description}</p>
+      <p class="intro-links">
+        <a href="/now/">What I'm doing now</a>
+        <span aria-hidden="true">·</span>
+        <a href="/about/">About</a>
+      </p>
+    </section>
+
+    {
+      featuredProjects.length > 0 && (
+        <section class="home-section">
+          <div class="section-header">
+            <h2>Featured projects</h2>
+            <a href="/projects/">All projects &rarr;</a>
+          </div>
+          <div class="project-grid">
+            {featuredProjects.map((project) => <ProjectCard project={project} />)}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      recentJournal.length > 0 && (
+        <section class="home-section">
+          <div class="section-header">
+            <h2>Recent journal entries</h2>
+            <a href="/journal/">All entries &rarr;</a>
+          </div>
+          <div class="journal-list">
+            {recentJournal.map((entry) => <JournalEntryCard entry={entry} />)}
+          </div>
+        </section>
+      )
+    }
+
+    {
+      recentNotes.length > 0 && (
+        <section class="home-section">
+          <div class="section-header">
+            <h2>Recent notes</h2>
+            <a href="/notes/">All notes &rarr;</a>
+          </div>
+          <div class="note-grid">
+            {recentNotes.map((note) => <NoteCard note={note} />)}
+          </div>
+        </section>
+      )
+    }
+
+    <section class="home-section">
+      <div class="section-header">
+        <h2>GitHub activity</h2>
+        <a href={site.socials.github} rel="noopener noreferrer" target="_blank">Profile &rarr;</a>
+      </div>
+      <GitHubActivityFeed />
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 64rem;
+    margin-inline: auto;
+    padding: 2.5rem 1.5rem 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+  }
+
+  .intro {
+    max-width: 40rem;
+  }
+
+  .eyebrow {
+    margin: 0 0 0.4rem 0;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-accent);
+  }
+
+  .intro h1 {
+    margin: 0 0 0.75rem 0;
+    font-size: 2rem;
+  }
+
+  .intro-description {
+    margin: 0 0 0.9rem 0;
+    color: var(--color-fg-muted);
+    font-size: 1.0625rem;
+    line-height: 1.6;
+  }
+
+  .intro-links {
+    margin: 0;
+    display: flex;
+    gap: 0.6rem;
+    font-size: 0.9375rem;
+  }
+
+  .intro-links a {
+    color: var(--color-accent);
+  }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+  }
+
+  .section-header h2 {
+    margin: 0;
+    font-size: 1.125rem;
+  }
+
+  .section-header a {
+    font-size: 0.875rem;
+    color: var(--color-accent);
+  }
+
+  .project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+
+  .note-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+</style>

@@ -1,0 +1,72 @@
+---
+import type { ReadingListEntry } from '../../data/reading-list';
+
+interface Props {
+  entry: ReadingListEntry;
+}
+
+const { entry } = Astro.props;
+
+const statusLabels: Record<ReadingListEntry['status'], string> = {
+  reading: 'Reading',
+  finished: 'Finished',
+  'want-to-read': 'Want to read',
+};
+---
+
+<li class="reading-item">
+  <div class="reading-item-header">
+    <p class="reading-item-title">
+      {entry.url ? <a href={entry.url} rel="noopener noreferrer" target="_blank">{entry.title}</a> : entry.title}
+    </p>
+    <span class="reading-item-status" data-status={entry.status}>{statusLabels[entry.status]}</span>
+  </div>
+  <p class="reading-item-author">{entry.author}</p>
+  {entry.notes && <p class="reading-item-notes">{entry.notes}</p>}
+</li>
+
+<style>
+  .reading-item {
+    border-bottom: 1px solid var(--color-border);
+    padding-block: 0.9rem;
+  }
+
+  .reading-item:last-child {
+    border-bottom: none;
+  }
+
+  .reading-item-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: baseline;
+  }
+
+  .reading-item-title {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .reading-item-title a {
+    color: inherit;
+  }
+
+  .reading-item-status {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+    text-transform: uppercase;
+  }
+
+  .reading-item-author {
+    margin: 0.15rem 0 0 0;
+    font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+
+  .reading-item-notes {
+    margin: 0.35rem 0 0 0;
+    font-size: 0.875rem;
+  }
+</style>

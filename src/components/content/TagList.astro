@@ -1,0 +1,33 @@
+---
+import TagBadge from '../ui/TagBadge.astro';
+
+interface Props {
+  tags: string[];
+  size?: 'sm' | 'md';
+}
+
+const { tags, size = 'sm' } = Astro.props;
+---
+
+{
+  tags.length > 0 && (
+    <ul class="tag-list">
+      {tags.map((tag) => (
+        <li>
+          <TagBadge tag={tag} size={size} />
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+<style>
+  .tag-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+</style>

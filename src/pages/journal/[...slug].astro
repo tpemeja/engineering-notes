@@ -1,0 +1,24 @@
+---
+import { getCollection, render, type CollectionEntry } from 'astro:content';
+import JournalLayout from '../../layouts/JournalLayout.astro';
+
+export async function getStaticPaths() {
+  const isProd = import.meta.env.PROD;
+  const entries = await getCollection('journal', ({ data }) => !isProd || !data.draft);
+  return entries.map((entry) => ({
+    params: { slug: entry.id },
+    props: { entry },
+  }));
+}
+
+interface Props {
+  entry: CollectionEntry<'journal'>;
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<JournalLayout entry={entry}>
+  <Content />
+</JournalLayout>

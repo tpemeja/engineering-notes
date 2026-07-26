@@ -1,0 +1,81 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import NoteCard from '../../components/content/NoteCard.astro';
+import { getPublishedNotes } from '../../lib/collections';
+import { slugifyTag } from '../../lib/tags';
+
+const notes = await getPublishedNotes();
+
+const byCategory = new Map<string, typeof notes>();
+for (const note of notes) {
+  const list = byCategory.get(note.data.category) ?? [];
+  list.push(note);
+  byCategory.set(note.data.category, list);
+}
+const categories = Array.from(byCategory.keys()).sort();
+---
+
+<BaseLayout
+  title="Notes"
+  description="Evergreen technical notes, organized by category and searchable."
+>
+  <div class="page-container">
+    <header class="page-header">
+      <h1>Notes</h1>
+      <p>Evergreen technical notes — written for future-me looking this up again.</p>
+    </header>
+
+    {
+      categories.map((category) => (
+        <section class="category-section" id={slugifyTag(category)}>
+          <h2>{category}</h2>
+          <div class="note-grid">
+            {byCategory.get(category)!.map((note) => <NoteCard note={note} />)}
+          </div>
+        </section>
+      ))
+    }
+  </div>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 64rem;
+    margin-inline: auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .page-header {
+    margin-bottom: 2rem;
+    max-width: 40rem;
+  }
+
+  .page-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.75rem;
+  }
+
+  .page-header p {
+    margin: 0;
+    color: var(--color-fg-muted);
+  }
+
+  .category-section {
+    margin-bottom: 2.5rem;
+    scroll-margin-top: 5rem;
+  }
+
+  .category-section h2 {
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-fg-muted);
+    margin: 0 0 1rem 0;
+  }
+
+  .note-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+  }
+</style>

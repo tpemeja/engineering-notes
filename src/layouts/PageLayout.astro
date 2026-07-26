@@ -1,0 +1,45 @@
+---
+import BaseLayout from './BaseLayout.astro';
+import Prose from '../components/content/Prose.astro';
+import { formatDate } from '../lib/dates';
+
+interface Props {
+  title: string;
+  description: string;
+  updatedDate?: Date;
+  ogImagePath?: string;
+}
+
+const { title, description, updatedDate, ogImagePath } = Astro.props;
+---
+
+<BaseLayout title={title} description={description} ogImagePath={ogImagePath}>
+  <div class="page-container">
+    <header class="page-header">
+      <h1>{title}</h1>
+      {updatedDate && <p class="updated-date">Last updated {formatDate(updatedDate)}</p>}
+    </header>
+    <Prose>
+      <slot />
+    </Prose>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 42rem;
+    margin-inline: auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .page-header h1 {
+    margin: 0;
+    font-size: 1.75rem;
+  }
+
+  .updated-date {
+    margin: 0.4rem 0 0 0;
+    font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+</style>

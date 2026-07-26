@@ -1,0 +1,62 @@
+---
+type Status = 'active' | 'paused' | 'completed' | 'evergreen' | 'draft';
+
+interface Props {
+  status: Status;
+}
+
+const { status } = Astro.props;
+
+const labels: Record<Status, string> = {
+  active: 'Active',
+  paused: 'Paused',
+  completed: 'Completed',
+  evergreen: 'Evergreen',
+  draft: 'Draft',
+};
+---
+
+<span class="status-badge" data-status={status}>
+  <span class="status-dot" aria-hidden="true"></span>
+  {labels[status]}
+</span>
+
+<style>
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .status-dot {
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: currentColor;
+  }
+
+  .status-badge[data-status='active'] {
+    color: var(--color-status-active);
+  }
+
+  .status-badge[data-status='paused'] {
+    color: var(--color-status-paused);
+  }
+
+  .status-badge[data-status='completed'] {
+    color: var(--color-status-completed);
+  }
+
+  .status-badge[data-status='evergreen'] {
+    color: var(--color-status-evergreen);
+  }
+
+  .status-badge[data-status='draft'] {
+    color: var(--color-status-draft);
+  }
+</style>

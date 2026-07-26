@@ -1,0 +1,71 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { formatDate } from '../../lib/dates';
+import TagList from './TagList.astro';
+
+interface Props {
+  entry: CollectionEntry<'journal'>;
+}
+
+const { entry } = Astro.props;
+const { title, date, period, summary, tags } = entry.data;
+---
+
+<article class="journal-card">
+  <a href={`/journal/${entry.id}/`} class="journal-card-link">
+    <div class="journal-card-meta">
+      <time datetime={date.toISOString()}>{formatDate(date)}</time>
+      <span aria-hidden="true">·</span>
+      <span>{period}</span>
+    </div>
+    <h3>{title}</h3>
+    <p class="journal-card-summary">{summary}</p>
+  </a>
+  <TagList tags={tags} />
+</article>
+
+<style>
+  .journal-card {
+    border-bottom: 1px solid var(--color-border);
+    padding-block: 1.1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .journal-card:last-child {
+    border-bottom: none;
+  }
+
+  .journal-card-link {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .journal-card-meta {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+
+  .journal-card h3 {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 600;
+  }
+
+  .journal-card-summary {
+    margin: 0;
+    color: var(--color-fg-muted);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+</style>

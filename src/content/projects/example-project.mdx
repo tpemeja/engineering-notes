@@ -1,0 +1,69 @@
+---
+title: '[Project Name]'
+description: '[One-sentence summary shown on cards and in SEO/OG metadata.]'
+status: active
+startDate: 2026-01-01
+technologies: ['Add', 'Your', 'Stack', 'Here']
+overview: '[2-4 sentences: what this project is and why it exists.]'
+problem: '[What problem or gap motivated this project?]'
+solution: '[What approach did you take, at a high level?]'
+architecture: '[Short prose description of the system''s shape. For a diagram, add an image under src/assets/ and import it with astro:assets'' <Image /> component in the body below.]'
+lessonsLearned: '[What would you do differently, or what surprised you? This can also just be a pointer to a Callout below.]'
+futureImprovements: '[What''s next for this project?]'
+githubUrl: 'https://github.com/your-username/project-name'
+relatedJournalSlugs: ['2026-w01-example-entry']
+relatedNotesSlugs: ['example-note']
+order: 10
+progress: 50
+---
+import Callout from '../../components/content/Callout.astro';
+
+<Callout variant="info" title="Template — replace before publishing">
+  This file demonstrates the `projects` collection schema
+  (`src/content.config.ts`). Duplicate it for each real project, fill in
+  the frontmatter above, and replace this body with real content. Delete
+  this callout once you have.
+</Callout>
+
+## Overview
+
+[Expand on the `overview` frontmatter field here in prose.]
+
+## Problem
+
+[What was broken, missing, or worth exploring?]
+
+## Solution
+
+[How did you approach it? What did you build?]
+
+## Architecture
+
+[Describe the system's components and how they interact. If you have a
+diagram (Excalidraw, Mermaid Live Editor export, etc.), save it under
+`src/assets/` and embed it here with:]
+
+```mdx
+import { Image } from 'astro:assets';
+import diagram from '../../assets/your-diagram.svg';
+
+<Image src={diagram} alt="Describe the diagram for accessibility" />
+```
+
+## Lessons learned
+
+<Callout variant="lesson" title="[Name the lesson]">
+  [What did you learn, and what would you tell yourself at the start of
+  the project?]
+</Callout>
+
+## Engineering decisions
+
+<Callout variant="decision" title="[Name the decision]">
+  [What choice did you make, what were the alternatives, and why did you
+  pick this one? One callout per notable decision.]
+</Callout>
+
+## Future improvements
+
+[What's the next iteration look like?]

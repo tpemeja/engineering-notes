@@ -1,0 +1,69 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import { formatDateShort } from '../../lib/dates';
+import StatusBadge from '../ui/StatusBadge.astro';
+
+interface Props {
+  note: CollectionEntry<'notes'>;
+}
+
+const { note } = Astro.props;
+const { title, category, lastUpdated, status } = note.data;
+---
+
+<article class="note-card">
+  <a href={`/notes/${note.id}/`} class="note-card-link">
+    <div class="note-card-meta">
+      <span class="note-card-category">{category}</span>
+      <StatusBadge status={status} />
+    </div>
+    <h3>{title}</h3>
+    <p class="note-card-updated">Updated {formatDateShort(lastUpdated)}</p>
+  </a>
+</article>
+
+<style>
+  .note-card {
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    padding: 1rem 1.1rem;
+    transition: border-color 0.15s ease;
+  }
+
+  .note-card:hover {
+    border-color: var(--color-accent);
+  }
+
+  .note-card-link {
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .note-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .note-card-category {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-accent);
+  }
+
+  .note-card h3 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+  }
+
+  .note-card-updated {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--color-fg-muted);
+  }
+</style>

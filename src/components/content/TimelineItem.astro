@@ -1,0 +1,70 @@
+---
+import { formatDateShort } from '../../lib/dates';
+import type { TimelineEntry } from '../../lib/collections';
+
+interface Props {
+  item: TimelineEntry;
+}
+
+const { item } = Astro.props;
+---
+
+<li class="timeline-item">
+  <div class="timeline-marker" data-kind={item.kind} aria-hidden="true"></div>
+  <div class="timeline-content">
+    <time datetime={item.date.toISOString()}>{formatDateShort(item.date)}</time>
+    <a href={item.href}>{item.title}</a>
+    <p>{item.description}</p>
+  </div>
+</li>
+
+<style>
+  .timeline-item {
+    display: grid;
+    grid-template-columns: 0.75rem 1fr;
+    gap: 0.9rem;
+    position: relative;
+    padding-bottom: 1.5rem;
+  }
+
+  .timeline-item:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: 0.34rem;
+    top: 1rem;
+    bottom: -0.25rem;
+    width: 1px;
+    background-color: var(--color-border);
+  }
+
+  .timeline-marker {
+    width: 0.75rem;
+    height: 0.75rem;
+    border-radius: 9999px;
+    margin-top: 0.3rem;
+    background-color: var(--color-fg-muted);
+  }
+
+  .timeline-marker[data-kind='project'] {
+    background-color: var(--color-accent);
+  }
+
+  .timeline-content time {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+    text-transform: uppercase;
+  }
+
+  .timeline-content a {
+    font-weight: 600;
+    color: var(--color-fg);
+  }
+
+  .timeline-content p {
+    margin: 0.15rem 0 0 0;
+    font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+</style>

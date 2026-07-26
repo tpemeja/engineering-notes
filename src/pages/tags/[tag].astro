@@ -1,0 +1,102 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { formatDateShort } from '../../lib/dates';
+import { getAllTags, getEntriesForTag, type TaggedEntry } from '../../lib/tags';
+
+export async function getStaticPaths() {
+  const tags = await getAllTags();
+  return tags.map((tag) => ({ params: { tag: tag.slug } }));
+}
+
+const { tag } = Astro.params;
+const result = await getEntriesForTag(tag!);
+
+const kindLabels: Record<TaggedEntry['kind'], string> = {
+  project: 'Project',
+  journal: 'Journal',
+  note: 'Note',
+};
+---
+
+<BaseLayout title={`#${result?.label ?? tag}`} description={`Everything tagged "${result?.label ?? tag}".`}>
+  <div class="page-container">
+    <header class="page-header">
+      <p class="eyebrow">Tag</p>
+      <h1>{result?.label ?? tag}</h1>
+    </header>
+    <ul class="tagged-list">
+      {
+        (result?.entries ?? []).map((entry) => (
+          <li>
+            <a href={entry.href} class="tagged-entry">
+              <div class="tagged-entry-meta">
+                <span class="tagged-entry-kind">{kindLabels[entry.kind]}</span>
+                <time datetime={entry.date.toISOString()}>{formatDateShort(entry.date)}</time>
+              </div>
+              <p class="tagged-entry-title">{entry.title}</p>
+              <p class="tagged-entry-description">{entry.description}</p>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 42rem;
+    margin-inline: auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .eyebrow {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--color-fg-muted);
+  }
+
+  .page-header h1 {
+    margin: 0.25rem 0 2rem 0;
+    font-size: 1.75rem;
+  }
+
+  .tagged-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tagged-entry {
+    display: block;
+    padding-block: 1rem;
+    border-bottom: 1px solid var(--color-border);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .tagged-entry-meta {
+    display: flex;
+    gap: 0.6rem;
+    align-items: center;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+    text-transform: uppercase;
+  }
+
+  .tagged-entry-title {
+    margin: 0.3rem 0 0.15rem 0;
+    font-weight: 600;
+  }
+
+  .tagged-entry-description {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+</style>

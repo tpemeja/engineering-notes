@@ -1,0 +1,43 @@
+---
+import SEOHead from '../components/seo/SEOHead.astro';
+import SkipLink from '../components/layout/SkipLink.astro';
+import SiteHeader from '../components/layout/SiteHeader.astro';
+import SiteFooter from '../components/layout/SiteFooter.astro';
+import '../styles/global.css';
+
+interface Props {
+  title: string;
+  description: string;
+  ogImagePath?: string;
+  type?: 'website' | 'article';
+}
+
+const { title, description, ogImagePath, type } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <script is:inline>
+      const stored = localStorage.getItem('theme');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (stored === 'dark' || (!stored && prefersDark)) {
+        document.documentElement.classList.add('dark');
+      }
+    </script>
+
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <SEOHead title={title} description={description} ogImagePath={ogImagePath} type={type} />
+  </head>
+  <body>
+    <SkipLink />
+    <SiteHeader />
+    <main id="main-content" data-pagefind-body>
+      <slot />
+    </main>
+    <SiteFooter />
+  </body>
+</html>

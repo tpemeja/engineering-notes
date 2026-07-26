@@ -1,0 +1,55 @@
+---
+import { getRecentGitHubActivity } from '../../lib/github';
+import { formatDateShort } from '../../lib/dates';
+
+interface Props {
+  limit?: number;
+}
+
+const { limit = 5 } = Astro.props;
+const activity = await getRecentGitHubActivity(limit);
+---
+
+{
+  activity.length > 0 && (
+    <ul class="github-feed not-prose">
+      {activity.map((item) => (
+        <li>
+          <time datetime={item.date.toISOString()}>{formatDateShort(item.date)}</time>
+          <span>
+            {item.label} <a href={item.href} rel="noopener noreferrer" target="_blank">{item.repo}</a>
+          </span>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+<style>
+  .github-feed {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .github-feed li {
+    display: flex;
+    gap: 0.75rem;
+    font-size: 0.875rem;
+    align-items: baseline;
+  }
+
+  .github-feed time {
+    flex-shrink: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+  }
+
+  .github-feed a {
+    color: var(--color-accent);
+  }
+</style>

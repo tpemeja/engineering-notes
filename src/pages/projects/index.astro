@@ -1,0 +1,55 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ProjectCard from '../../components/content/ProjectCard.astro';
+import { getPublishedProjects } from '../../lib/collections';
+
+const projects = await getPublishedProjects();
+---
+
+<BaseLayout
+  title="Projects"
+  description="Software engineering projects, documented as they're built: problem, solution, architecture, and lessons learned."
+>
+  <div class="page-container">
+    <header class="page-header">
+      <h1>Projects</h1>
+      <p>
+        Each project page covers the problem, the solution, the
+        architecture, and what I'd do differently — updated as the work
+        progresses, not written after the fact.
+      </p>
+    </header>
+    <div class="project-grid">
+      {projects.map((project) => <ProjectCard project={project} />)}
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 64rem;
+    margin-inline: auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .page-header {
+    margin-bottom: 2rem;
+    max-width: 40rem;
+  }
+
+  .page-header h1 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.75rem;
+  }
+
+  .page-header p {
+    margin: 0;
+    color: var(--color-fg-muted);
+  }
+
+  .project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+</style>

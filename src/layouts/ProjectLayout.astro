@@ -1,0 +1,138 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import BaseLayout from './BaseLayout.astro';
+import Prose from '../components/content/Prose.astro';
+import StatusBadge from '../components/ui/StatusBadge.astro';
+import TagList from '../components/content/TagList.astro';
+import RelatedContent from '../components/content/RelatedContent.astro';
+import { formatDate } from '../lib/dates';
+import { getEntries } from 'astro:content';
+
+interface Props {
+  project: CollectionEntry<'projects'>;
+}
+
+const { project } = Astro.props;
+const { title, description, status, startDate, endDate, technologies, githubUrl, progress } = project.data;
+
+const relatedJournal = project.data.relatedJournalSlugs.length
+  ? await getEntries(project.data.relatedJournalSlugs)
+  : [];
+const relatedNotes = project.data.relatedNotesSlugs.length
+  ? await getEntries(project.data.relatedNotesSlugs)
+  : [];
+---
+
+<BaseLayout title={title} description={description} ogImagePath={`/open-graph/projects/${project.id}.png`} type="article">
+  <article class="page-container">
+    <header class="project-header">
+      <div class="project-header-top">
+        <h1>{title}</h1>
+        <StatusBadge status={status} />
+      </div>
+      <p class="project-description">{description}</p>
+      <dl class="project-meta">
+        <div>
+          <dt>Started</dt>
+          <dd>{formatDate(startDate)}</dd>
+        </div>
+        {
+          endDate && (
+            <div>
+              <dt>Ended</dt>
+              <dd>{formatDate(endDate)}</dd>
+            </div>
+          )
+        }
+        {
+          typeof progress === 'number' && (
+            <div>
+              <dt>Progress</dt>
+              <dd>{progress}%</dd>
+            </div>
+          )
+        }
+        {
+          githubUrl && (
+            <div>
+              <dt>Repository</dt>
+              <dd><a href={githubUrl} rel="noopener noreferrer" target="_blank">GitHub &#8599;</a></dd>
+            </div>
+          )
+        }
+      </dl>
+      <TagList tags={technologies} size="md" />
+    </header>
+
+    <Prose>
+      <slot />
+    </Prose>
+
+    <RelatedContent title="Related" journal={relatedJournal} notes={relatedNotes} />
+  </article>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 42rem;
+    margin-inline: auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .project-header {
+    margin-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .project-header-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .project-header-top h1 {
+    margin: 0;
+    font-size: 1.75rem;
+  }
+
+  .project-description {
+    margin: 0;
+    color: var(--color-fg-muted);
+    font-size: 1.0625rem;
+  }
+
+  .project-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    margin: 0;
+    padding: 0.9rem 0;
+    border-block: 1px solid var(--color-border);
+  }
+
+  .project-meta div {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+
+  .project-meta dt {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-fg-muted);
+  }
+
+  .project-meta dd {
+    margin: 0;
+    font-size: 0.9375rem;
+  }
+
+  .project-meta a {
+    color: var(--color-accent);
+  }
+</style>
