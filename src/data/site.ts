@@ -1,18 +1,15 @@
-// Fill in `author`, `githubUser`, and `socials.github` with your real
-// values — `githubUser` in particular is used to fetch live activity
-// (see src/lib/github.ts), so a wrong username will just fetch nothing.
 export const site = {
-  title: 'Kaseovo',
+  title: 'Engineering Notes - Tanguy PEMEJA',
   tagline: 'A public engineering notebook',
   description:
     'Projects, journal entries, and technical notes documented in public — what I\'m building, what I\'m learning, and the decisions along the way.',
   url: 'https://engineering.kaseovo.com',
-  author: '[Your Name]',
-  githubUser: 'your-github-username',
+  author: 'Tanguy PEMEJA',
+  githubUser: 'tpemeja',
   githubRepo: 'engineering-notes',
   socials: {
-    github: 'https://github.com/your-github-username',
-    email: 'your-email@example.com',
+    github: 'https://github.com/tpemeja',
+    email: 'tanguy.pemeja@gmail.com',
   },
 } as const;
 
