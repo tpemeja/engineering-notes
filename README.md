@@ -56,24 +56,29 @@ a few things need your real information before this is a real site:
 Note: search (Pagefind) only works against a production build — in `pnpm dev`
 the search box will tell you to run `pnpm build` first.
 
-## Deployment (Cloudflare Pages via GitHub Actions)
+## Deployment (Cloudflare Pages, Git-connected)
 
-`.github/workflows/deploy.yml` builds the site and deploys it to Cloudflare
-Pages on every push to `main`, using `cloudflare/wrangler-action`.
+This repo is connected directly to a Cloudflare Pages project (**Workers &
+Pages → engineering-notes → Settings → Builds**) — no GitHub Actions
+involved. Cloudflare builds and deploys automatically on every push to
+`main`, using:
 
-Before this will work, you need to set up, **outside of this repo**:
+- **Framework preset**: Astro
+- **Build command**: `npm run build` (runs `astro build && pagefind --site dist`
+  either way — the command string doesn't have to match the package manager;
+  Cloudflare detects pnpm from `pnpm-lock.yaml` for the install step)
+- **Build output directory**: `dist`
 
-1. A Cloudflare Pages project. The workflow deploys with
-   `--project-name=engineering-notes` — either create a Pages project with
-   that exact name, or edit the workflow to match whatever name you use.
-2. Two repository secrets (Settings → Secrets and variables → Actions):
-   - `CLOUDFLARE_API_TOKEN` — a token scoped to Cloudflare Pages edit access.
-   - `CLOUDFLARE_ACCOUNT_ID` — your Cloudflare account ID.
-3. Attaching your custom domain to the Pages project in the Cloudflare
-   dashboard (or `wrangler pages domain add`) — this is a one-time manual
-   step, not something CI does for you. `astro.config.mjs`'s `site` field
-   is already set to `https://engineering.kaseovo.com`; update it if the
-   domain changes.
+The custom domain (`engineering.kaseovo.com`) is attached under the Pages
+project's **Custom domains** tab — a one-time manual step, not part of the
+build. `astro.config.mjs`'s `site` field is already set to match; update it
+if the domain changes.
+
+No repository secrets are needed for deployment. `pnpm-workspace.yaml`'s
+`allowBuilds: esbuild: true` is still required though — it approves
+esbuild's (a transitive Vite dependency) install script, which pnpm 10+
+blocks by default; without it, Cloudflare's own `pnpm install` step fails
+the same way local installs did before that was added.
 
 ## Diagrams
 
