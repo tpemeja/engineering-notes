@@ -1,11 +1,12 @@
 import { getPublishedJournalEntries, getPublishedNotes, getPublishedProjects } from './collections';
+import { readingList } from '../data/reading-list';
 
 export interface TaggedEntry {
   title: string;
   description: string;
   href: string;
   date: Date;
-  kind: 'project' | 'journal' | 'note';
+  kind: 'project' | 'journal' | 'note' | 'book';
 }
 
 export function slugifyTag(tag: string): string {
@@ -69,6 +70,17 @@ async function buildTagBuckets(): Promise<Map<string, TagBucket>> {
       kind: 'note',
     };
     for (const tag of entry.data.tags) add(tag, tagged);
+  }
+
+  for (const entry of readingList) {
+    const tagged: TaggedEntry = {
+      title: entry.title,
+      description: entry.author,
+      href: '/about/#reading-list',
+      date: new Date(entry.dateAdded),
+      kind: 'book',
+    };
+    for (const tag of entry.tags ?? []) add(tag, tagged);
   }
 
   return buckets;

@@ -1,5 +1,6 @@
 ---
 import type { ReadingListEntry } from '../../data/reading-list';
+import TagList from './TagList.astro';
 
 interface Props {
   entry: ReadingListEntry;
@@ -23,6 +24,11 @@ const statusLabels: Record<ReadingListEntry['status'], string> = {
   </div>
   <p class="reading-item-author">{entry.author}</p>
   {entry.notes && <p class="reading-item-notes">{entry.notes}</p>}
+  {entry.tags && entry.tags.length > 0 && (
+    <div class="reading-item-tags">
+      <TagList tags={entry.tags} />
+    </div>
+  )}
 </li>
 
 <style>
@@ -68,5 +74,9 @@ const statusLabels: Record<ReadingListEntry['status'], string> = {
   .reading-item-notes {
     margin: 0.35rem 0 0 0;
     font-size: 0.875rem;
+  }
+
+  .reading-item-tags {
+    margin-top: 0.5rem;
   }
 </style>

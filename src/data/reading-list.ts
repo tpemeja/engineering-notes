@@ -8,14 +8,19 @@ export interface ReadingListEntry {
   notes?: string;
 }
 
-// Template — replace with what you're actually reading.
 export const readingList: ReadingListEntry[] = [
   {
-    title: '[Book Title]',
-    author: '[Author Name]',
+    title: 'The DevOps Handbook',
+    author: 'Gene Kim, Patrick Debois, John Willis, Jez Humble',
     status: 'reading',
-    dateAdded: '2026-01-01',
-    tags: ['Add', 'Tags'],
-    notes: '[Optional: why this book, or what you\'re getting out of it.]',
+    dateAdded: '2026-07-27',
+    tags: ['DevOps', 'Engineering Culture'],
+  },
+  {
+    title: 'The Phoenix Project',
+    author: 'Gene Kim, Kevin Behr, George Spafford',
+    status: 'finished',
+    dateAdded: '2026-07-27',
+    tags: ['DevOps', 'Fiction'],
   },
 ];
