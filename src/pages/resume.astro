@@ -1,17 +1,20 @@
 ---
 import { getEntry, render } from 'astro:content';
 import PageLayout from '../layouts/PageLayout.astro';
+import { site } from '../data/site';
 
 const entry = await getEntry('pages', 'resume');
 if (!entry) throw new Error('Missing src/content/pages/resume.mdx');
 const { Content } = await render(entry);
+
+const downloadName = `${site.author.replace(/\s+/g, '-')}-Resume.pdf`;
 ---
 
 <PageLayout title={entry.data.title} description={entry.data.description} updatedDate={entry.data.updatedDate}>
   {
     entry.data.pdfUrl && (
       <p class="not-prose">
-        <a href={entry.data.pdfUrl} class="pdf-download" download>
+        <a href={entry.data.pdfUrl} class="pdf-download" download={downloadName}>
           Download PDF
         </a>
       </p>
