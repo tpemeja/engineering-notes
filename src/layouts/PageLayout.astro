@@ -8,16 +8,19 @@ interface Props {
   description: string;
   updatedDate?: Date;
   ogImagePath?: string;
+  wide?: boolean;
 }
 
-const { title, description, updatedDate, ogImagePath } = Astro.props;
+const { title, description, updatedDate, ogImagePath, wide = false } = Astro.props;
 ---
 
 <BaseLayout title={title} description={description} ogImagePath={ogImagePath}>
-  <div class="page-container">
+  <div class="page-container" data-wide={wide}>
     <header class="page-header">
-      <h1>{title}</h1>
+      <div class="page-header-top">
       {updatedDate && <p class="updated-date">Last updated {formatDate(updatedDate)}</p>}
+        <slot name="header-action" />
+      </div>
     </header>
     <Prose>
       <slot />
@@ -32,7 +35,19 @@ const { title, description, updatedDate, ogImagePath } = Astro.props;
     padding: 2.5rem 1.5rem 4rem;
   }
 
-  .page-header h1 {
+  .page-container[data-wide='true'] {
+    max-width: 64rem;
+  }
+
+  .page-header-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .page-header-top h1 {
     margin: 0;
     font-size: 1.75rem;
   }

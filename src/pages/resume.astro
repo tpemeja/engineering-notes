@@ -10,14 +10,12 @@ const { Content } = await render(entry);
 const downloadName = `${site.author.replace(/\s+/g, '-')}-Resume.pdf`;
 ---
 
-<PageLayout title={entry.data.title} description={entry.data.description} updatedDate={entry.data.updatedDate}>
+<PageLayout title={entry.data.title} description={entry.data.description} updatedDate={entry.data.updatedDate} wide>
   {
     entry.data.pdfUrl && (
-      <p class="not-prose">
-        <a href={entry.data.pdfUrl} class="pdf-download" download={downloadName}>
-          Download PDF
-        </a>
-      </p>
+      <a slot="header-action" href={entry.data.pdfUrl} class="pdf-download not-prose" download={downloadName}>
+        Download PDF
+      </a>
     )
   }
   <Content />

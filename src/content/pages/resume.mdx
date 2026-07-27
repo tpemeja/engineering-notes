@@ -4,59 +4,79 @@ description: 'Senior Backend & Platform Engineer — 5 years building backend AP
 updatedDate: 2026-07-27
 pdfUrl: '/resume.pdf'
 ---
+import LanguageLevel from '../../components/content/LanguageLevel.astro';
+import EducationItem from '../../components/content/EducationItem.astro';
+import SkillRow from '../../components/content/SkillRow.astro';
+import ExperienceHeader from '../../components/content/ExperienceHeader.astro';
 
-**Tanguy Pemeja** — Senior Backend & Platform Engineer<br />
-Japan — relocating to Singapore (Dependant's Pass)
+<br />
+# Senior Backend & Platform Engineer
+<p class="text-sm text-[var(--color-fg-muted)] mt-1">
+  Based in Japan — <span class="font-semibold text-[var(--color-accent)]">relocating to Singapore (Dependant's Pass)</span>
+</p>
+
+## Profile
 
 Senior Backend & Platform Engineer with 5 years of experience building
 backend APIs and distributed systems across cloud and edge environments
-in cybersecurity and IoT. Strong focus on FastAPI-based backend
+in cybersecurity and IoT. 
+
+Strong focus on FastAPI-based backend
 development, platform engineering, and production operations, combined
 with infrastructure automation, deployment workflows, and observability.
+
 Currently working on AI-enabled edge computing systems for device
 management. Experienced working across France and Japan, collaborating
 with teams across multiple time zones.
 
 ## Experience
 
-**Senior Backend Developer — EDGEMATRIX Inc.** · Tokyo, Japan · May 2024 – Present
+<ExperienceHeader role="Senior Backend Developer" company="EDGEMATRIX Inc." location="Tokyo, Japan" dates="May 2024 – Present" />
 - Design and maintain backend APIs and cloud services for an IoT edge platform: device lifecycle management, configuration delivery, and sync with Linux-based edge devices, including a staging environment for deployment validation.
 - Implemented cloud-side authentication and authorization using Auth0 (OAuth2/OIDC).
 - Contributed to a secure update and deployment pipeline for edge devices, supporting encrypted, device-specific software distribution.
 - Maintain a Docker Compose–based microservices runtime on edge devices (~10 services per device), using Traefik and Authelia for routing and service interactions.
 - Designed and operate monitoring across cloud (AWS CloudWatch) and edge (Grafana + Loki) environments.
 
-**Cybersecurity Engineer — TEHTRIS Japan** · Tokyo, Japan · Dec 2022 – Apr 2024
+<ExperienceHeader role="Cybersecurity Engineer" company="TEHTRIS Japan" location="Tokyo, Japan" dates="Dec 2022 – Apr 2024" />
 - Developed an internal self-service deployment platform (Airflow + Packer) for automated infrastructure/OS provisioning on OVH Cloud, cutting deployment time from days to hours.
 - Primary incident responder during APAC coverage hours: investigating production anomalies, coordinating escalations, and contributing to post-incident reviews with global engineering teams.
 - Designed and evolved Grafana monitoring dashboards for production systems.
 - Supported technical investigations during APAC coverage hours for XDR-related products.
 
-**R&D Cybersecurity Consultant — TEHTRIS** · Pessac, France · Sep 2021 – Dec 2022
+<ExperienceHeader role="R&D Cybersecurity Consultant" company="TEHTRIS" location="Pessac, France" dates="Sep 2021 – Dec 2022" />
 - Developed and maintained FastAPI-based backend services exposing APIs for external XDR security products.
 - Built an internal operations platform (backend APIs + lightweight web interface) to manage OVH Cloud environments and operational workflows, with Okta-based authentication and RBAC.
 - Improved reliability of owned services through API hardening, testing, and documentation automation.
 
-**Machine Learning Intern — INRIA** · Bordeaux, France · Mar 2021 – Aug 2021
+<ExperienceHeader role="Machine Learning Intern" company="INRIA" location="Bordeaux, France" dates="Mar 2021 – Aug 2021" />
 - Developed and optimized neural-network-based control systems for a prosthetic arm, improving movement precision through simulation and experimental analysis.
 - Implemented a virtual reality simulation environment for data collection, testing, and evaluation of prosthetic arm control models.
 
 ## Education
 
-- **Diplôme d'Ingénieur (MSc Computer Science)** — ENSEIRB-MATMECA · 2018–2021
-- **Exchange Semester** — Keio University · 2020–2021
+<ul class="not-prose">
+  <EducationItem degree="Diplôme d'Ingénieur (MSc Computer Science)" institution="ENSEIRB-MATMECA" years="2018–2021" />
+  <EducationItem degree="Exchange Semester" institution="Keio University" years="2020–2021" />
+</ul>
 
 ## Languages
 
-French (Native) · English (Full Professional) · Japanese (Elementary)
+<ul class="not-prose">
+  <LanguageLevel language="French" level="Native" />
+  <LanguageLevel language="English" level="Full Professional" />
+  <LanguageLevel language="Japanese" level="Elementary" />
+</ul>
 
 ## Skills
 
-- **Backend** — Python, FastAPI, Pydantic, WebSockets, REST APIs, OpenAPI/Swagger
-- **Frontend** — Vue.js, PrimeVue, Tailwind CSS, HTML, JavaScript
-- **Cloud & Platform Engineering** — AWS (EC2, Elastic Beanstalk, CloudWatch), OVH Cloud, Docker, CI/CD, GitHub Actions, Airflow, Packer
-- **Observability & Operations** — Grafana, Loki, Prometheus, Monitoring, Alerting, Incident Response
-- **Edge & Systems** — Linux, Docker Compose, Traefik, IoT / Edge Device Management
-- **Databases** — MySQL, Redis
-- **Identity & Access Management** — OAuth2/OIDC, RBAC, Auth0, Okta, Authelia
-- **Security** — XDR (EDR, SIEM, SOAR)
+<ul class="not-prose">
+  <SkillRow category="Backend" technologies="Python, FastAPI, Pydantic, WebSockets, REST APIs, OpenAPI/Swagger" />
+  <SkillRow category="Frontend" technologies="Vue.js, PrimeVue, Tailwind CSS, HTML, JavaScript" />
+  <SkillRow category="Cloud & Platform Engineering" technologies="AWS (EC2, Elastic Beanstalk, CloudWatch), OVH Cloud, Docker, CI/CD, GitHub Actions, Airflow, Packer" />
+  <SkillRow category="Observability & Operations" technologies="Grafana, Loki, Prometheus, Monitoring, Alerting, Incident Response" />
+  <SkillRow category="Edge & Systems" technologies="Linux, Docker Compose, Traefik, IoT / Edge Device Management" />
+  <SkillRow category="Databases" technologies="MySQL, Redis" />
+  <SkillRow category="Identity & Access Management" technologies="OAuth2/OIDC, RBAC, Auth0, Okta, Authelia" />
+  <SkillRow category="Security" technologies="XDR (EDR, SIEM, SOAR)" />
+</ul>

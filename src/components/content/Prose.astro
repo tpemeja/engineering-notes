@@ -4,3 +4,10 @@
 <div class="prose prose-neutral dark:prose-invert max-w-none">
   <slot />
 </div>
+
+<style>
+  .prose :global(table) {
+    display: block;
+    overflow-x: auto;
+  }
+</style>

@@ -1,5 +1,9 @@
 # build output
 dist/
+
+# mirrored into public/ by `pnpm build` so Pagefind search also works
+# in `astro dev` (using whatever was indexed as of the last build)
+public/pagefind/
 # generated types
 .astro/
 

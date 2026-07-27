@@ -81,8 +81,15 @@
         pagefindUiCss.href = '/pagefind/pagefind-ui.css';
         document.head.appendChild(pagefindUiCss);
 
-        const { PagefindUI } = await import(/* @vite-ignore */ '/pagefind/pagefind-ui.js');
-        new PagefindUI({ element: '#search-dialog-results', showSubResults: true, showImages: false });
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = '/pagefind/pagefind-ui.js';
+          script.onload = resolve;
+          script.onerror = reject;
+          document.head.appendChild(script);
+        });
+
+        new window.PagefindUI({ element: '#search-dialog-results', showSubResults: true, showImages: false });
       } catch {
         document.getElementById('search-unavailable')?.removeAttribute('hidden');
       }

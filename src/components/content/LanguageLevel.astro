@@ -1,0 +1,37 @@
+---
+interface Props {
+  language: string;
+  level: string;
+}
+
+const { language, level } = Astro.props;
+---
+
+<li class="lang-row">
+  <span class="lang-name">{language}</span>
+  <span class="lang-level">{level}</span>
+</li>
+
+<style>
+  .lang-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding-block: 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .lang-row:last-child {
+    border-bottom: none;
+  }
+
+  .lang-name {
+    font-weight: 600;
+  }
+
+  .lang-level {
+    font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+</style>

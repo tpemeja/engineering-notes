@@ -1,0 +1,36 @@
+---
+interface Props {
+  role: string;
+  company: string;
+  location: string;
+  dates: string;
+}
+
+const { role, company, location, dates } = Astro.props;
+---
+
+<div class="exp-header not-prose">
+  <p class="exp-title">{role} — {company}</p>
+  <p class="exp-meta">{location} · {dates}</p>
+</div>
+
+<style>
+  .exp-header {
+    margin-top: 1.5rem;
+  }
+
+  .exp-header:first-of-type {
+    margin-top: 0;
+  }
+
+  .exp-title {
+    margin: 0;
+    font-weight: 600;
+  }
+
+  .exp-meta {
+    margin: 0.2rem 0 0 0;
+    font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+</style>
