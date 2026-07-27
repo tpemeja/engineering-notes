@@ -1,5 +1,5 @@
 export const site = {
-  title: 'Engineering Notes - Tanguy PEMEJA',
+  title: 'Tanguy PEMEJA',
   tagline: 'A public engineering notebook',
   description:
     'Projects, journal entries, and technical notes documented in public — what I\'m building, what I\'m learning, and the decisions along the way.',
