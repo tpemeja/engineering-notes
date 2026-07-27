@@ -5,12 +5,15 @@ import { site } from '../data/site';
 
 <PageLayout title="Contact" description="Get in touch.">
   <p>
-    The most reliable way to reach me is email:
-    {' '}<a href={`mailto:${site.socials.email}`}>{site.socials.email}</a>.
+  The easiest way to reach me is by email:
+  {' '}<a href={`mailto:${site.socials.email}`}>{site.socials.email}</a>.
   </p>
   <p>
-    I'm also on <a href={site.socials.github} rel="noopener noreferrer" target="_blank">GitHub</a> —
-    that's the best place to see what I'm actively working on, or to open
-    an issue/PR against anything linked from this site.
+  If you're curious about what I'm currently building, have a look at my <a href={site.socials.github} rel="noopener noreferrer" target="_blank">GitHub</a>. 
+  If you spot something interesting, feel free to open an issue or a pull request. 
+  </p>
+  <p>
+  You can also connect with me on{' '}
+  <a href={site.socials.linkedin} rel="noopener noreferrer" target="_blank">LinkedIn</a>.
   </p>
 </PageLayout>

@@ -9,6 +9,7 @@ export const site = {
   githubRepo: 'engineering-notes',
   socials: {
     github: 'https://github.com/tpemeja',
+    linkedin: 'https://www.linkedin.com/in/tanguy-pemeja',
     email: 'tanguy.pemeja@gmail.com',
   },
 } as const;
