@@ -2,7 +2,7 @@ export const site = {
   title: 'Tanguy PEMEJA',
   tagline: 'A public engineering notebook',
   description:
-    'Projects, journal entries, and technical notes documented in public — what I\'m building, what I\'m learning, and the decisions along the way.',
+    "Projects, journal entries, and technical notes documented in public: what I'm building, what I'm learning, and the decisions along the way.",
   url: 'https://engineering.kaseovo.com',
   author: 'Tanguy PEMEJA',
   githubUser: 'tpemeja',
