@@ -1,18 +1,16 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import ProjectCard from './ProjectCard.astro';
-import JournalEntryCard from './JournalEntryCard.astro';
 import NoteCard from './NoteCard.astro';
 
 interface Props {
   title?: string;
   projects?: CollectionEntry<'projects'>[];
-  journal?: CollectionEntry<'journal'>[];
   notes?: CollectionEntry<'notes'>[];
 }
 
-const { title = 'Related', projects = [], journal = [], notes = [] } = Astro.props;
-const hasContent = projects.length > 0 || journal.length > 0 || notes.length > 0;
+const { title = 'Related', projects = [], notes = [] } = Astro.props;
+const hasContent = projects.length > 0 || notes.length > 0;
 ---
 
 {
@@ -22,9 +20,6 @@ const hasContent = projects.length > 0 || journal.length > 0 || notes.length > 0
       <div class="related-grid">
         {projects.map((project) => (
           <ProjectCard project={project} />
-        ))}
-        {journal.map((entry) => (
-          <JournalEntryCard entry={entry} />
         ))}
         {notes.map((note) => (
           <NoteCard note={note} />

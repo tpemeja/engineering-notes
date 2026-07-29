@@ -1,0 +1,81 @@
+---
+import { getJournalEntriesForPhase } from '../../lib/collections';
+import { formatDate } from '../../lib/dates';
+
+interface Props {
+  projectSlug: string;
+  phaseId: string;
+}
+
+const { projectSlug, phaseId } = Astro.props;
+const entries = await getJournalEntriesForPhase(projectSlug, phaseId);
+---
+
+{
+  entries.length > 0 && (
+    <aside class="not-prose phase-journal" aria-label="Journal entries for this phase">
+      <p class="phase-journal-heading">Journal</p>
+      <ul>
+        {entries.map((entry) => (
+          <li>
+            <a href={`/journal/${entry.id}/`}>
+              <time datetime={entry.data.date.toISOString()}>{formatDate(entry.data.date)}</time>
+              <span>{entry.data.title}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </aside>
+  )
+}
+
+<style>
+  .phase-journal {
+    margin-block: 1.25rem;
+    border-left: 3px solid var(--color-border);
+    padding: 0.75rem 1rem;
+    border-radius: 0.25rem;
+    background-color: var(--color-bg-subtle);
+  }
+
+  .phase-journal-heading {
+    margin: 0 0 0.5rem 0;
+    font-weight: 600;
+    font-size: 0.8125rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-fg-muted);
+  }
+
+  .phase-journal ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .phase-journal a {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: baseline;
+    color: var(--color-fg);
+    text-decoration: none;
+    font-size: 0.9375rem;
+  }
+
+  .phase-journal a:hover {
+    color: var(--color-accent);
+  }
+
+  .phase-journal time {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+</style>

@@ -5,19 +5,24 @@ import Prose from '../components/content/Prose.astro';
 import StatusBadge from '../components/ui/StatusBadge.astro';
 import TagList from '../components/content/TagList.astro';
 import RelatedContent from '../components/content/RelatedContent.astro';
+import PhaseStepper from '../components/content/PhaseStepper.astro';
 import { formatDate } from '../lib/dates';
 import { getEntries } from 'astro:content';
 
-interface Props {
-  project: CollectionEntry<'projects'>;
+interface Heading {
+  depth: number;
+  slug: string;
+  text: string;
 }
 
-const { project } = Astro.props;
-const { title, description, status, startDate, endDate, technologies, githubUrl, progress } = project.data;
+interface Props {
+  project: CollectionEntry<'projects'>;
+  headings: Heading[];
+}
 
-const relatedJournal = project.data.relatedJournalSlugs.length
-  ? await getEntries(project.data.relatedJournalSlugs)
-  : [];
+const { project, headings } = Astro.props;
+const { title, description, status, startDate, endDate, technologies, githubUrl, progress, phases } = project.data;
+
 const relatedNotes = project.data.relatedNotesSlugs.length
   ? await getEntries(project.data.relatedNotesSlugs)
   : [];
@@ -64,17 +69,19 @@ const relatedNotes = project.data.relatedNotesSlugs.length
       <TagList tags={technologies} size="md" />
     </header>
 
+    <PhaseStepper phases={phases} headings={headings} />
+
     <Prose>
       <slot />
     </Prose>
 
-    <RelatedContent title="Related" journal={relatedJournal} notes={relatedNotes} />
+    <RelatedContent title="Related" notes={relatedNotes} />
   </article>
 </BaseLayout>
 
 <style>
   .page-container {
-    max-width: 42rem;
+    max-width: 64rem;
     margin-inline: auto;
     padding: 2.5rem 1.5rem 4rem;
   }
@@ -108,6 +115,7 @@ const relatedNotes = project.data.relatedNotesSlugs.length
   .project-meta {
     display: flex;
     flex-wrap: wrap;
+    justify-content: space-between;
     gap: 1.5rem;
     margin: 0;
     padding: 0.9rem 0;

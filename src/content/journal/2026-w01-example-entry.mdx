@@ -5,6 +5,7 @@ period: '2026-W01'
 tags: ['Add', 'Relevant', 'Tags']
 summary: '[One or two sentences summarizing the week — shown on cards and RSS.]'
 relatedProjectSlug: 'example-project'
+projectPhaseId: 'phase-1-slug'
 draft: false
 ---
 import Callout from '../../components/content/Callout.astro';
@@ -13,6 +14,8 @@ import Callout from '../../components/content/Callout.astro';
   This file demonstrates the `journal` collection schema
   (`src/content.config.ts`). Duplicate it for each real entry (roughly one
   per week), fill in the frontmatter above, and replace this body.
+  `projectPhaseId` is optional — set it to the matching `phases[].id` on the
+  related project to have this entry show up under that phase automatically.
 </Callout>
 
 ## What I worked on

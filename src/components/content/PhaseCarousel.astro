@@ -1,0 +1,226 @@
+---
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  phases: CollectionEntry<'projects'>['data']['phases'];
+}
+
+const { phases } = Astro.props;
+const phasesMeta = phases.map(({ id, status }) => ({ id, status }));
+---
+
+<div class="phase-carousel">
+  <div class="not-prose phase-carousel-nav">
+    <div class="phase-carousel-dots" data-dots role="tablist" aria-label="Jump to phase" />
+    <div class="phase-carousel-controls">
+      <button type="button" class="phase-carousel-prev" aria-label="Previous phase">&#8249;</button>
+      <span class="phase-carousel-current" data-current aria-live="polite" />
+      <button type="button" class="phase-carousel-next" aria-label="Next phase">&#8250;</button>
+    </div>
+  </div>
+  <div class="phase-carousel-slides" data-slides>
+    <slot />
+  </div>
+  <script type="application/json" data-phases-meta is:inline set:html={JSON.stringify(phasesMeta)} />
+</div>
+
+<style>
+  .phase-carousel {
+    margin-block: 1.75rem;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    scroll-margin-top: 5rem;
+  }
+
+  .phase-carousel-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1.25rem;
+    margin-block-end: 1.25rem;
+    padding-block-end: 0.85rem;
+    border-block-end: 1px solid var(--color-border);
+  }
+
+  .phase-carousel-dots {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .phase-carousel-dots :global(.phase-carousel-dot) {
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 9999px;
+    border: 2px solid var(--color-border);
+    background-color: var(--color-bg);
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .phase-carousel-dots :global(.phase-carousel-dot[data-status='done']) {
+    border-color: var(--color-status-completed);
+    background-color: var(--color-status-completed);
+  }
+
+  .phase-carousel-dots :global(.phase-carousel-dot[data-status='in-progress']) {
+    border-color: var(--color-status-active);
+  }
+
+  .phase-carousel-dots :global(.phase-carousel-dot[data-status='planned']) {
+    border-style: dashed;
+    border-color: var(--color-status-draft);
+  }
+
+  .phase-carousel-dots :global(.phase-carousel-dot[aria-selected='true']) {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 30%, transparent);
+  }
+
+  .phase-carousel-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+  }
+
+  .phase-carousel-controls button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+    background-color: var(--color-bg);
+    color: var(--color-fg);
+    font-size: 1rem;
+    cursor: pointer;
+  }
+
+  .phase-carousel-controls button:hover:not(:disabled) {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+
+  .phase-carousel-controls button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  .phase-carousel-current {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-fg);
+    white-space: nowrap;
+  }
+
+  .phase-carousel-slides :global(h3) {
+    scroll-margin-top: 5rem;
+    margin-block-start: 0 !important;
+  }
+</style>
+
+<script>
+  // A project has one phase carousel, but this stays defensive in case that changes.
+  document.querySelectorAll<HTMLElement>('.phase-carousel').forEach((root) => {
+    const slidesContainer = root.querySelector<HTMLElement>('[data-slides]');
+    const prevBtn = root.querySelector<HTMLButtonElement>('.phase-carousel-prev');
+    const nextBtn = root.querySelector<HTMLButtonElement>('.phase-carousel-next');
+    const currentEl = root.querySelector<HTMLElement>('[data-current]');
+    const dotsContainer = root.querySelector<HTMLElement>('[data-dots]');
+    const metaScript = root.querySelector<HTMLScriptElement>('[data-phases-meta]');
+    if (!slidesContainer || !prevBtn || !nextBtn) return;
+
+    type PhaseMeta = { id: string; status: 'planned' | 'in-progress' | 'done' };
+    let meta: PhaseMeta[] = [];
+    try {
+      meta = metaScript?.textContent ? JSON.parse(metaScript.textContent) : [];
+    } catch {
+      meta = [];
+    }
+
+    // Group the slotted content into one slide per `### Heading` — everything
+    // between one h3 and the next belongs to that phase (journal box, prose,
+    // callouts). Content before the first h3 (there shouldn't be any) is
+    // dropped rather than silently left always-visible.
+    const children = Array.from(slidesContainer.children);
+    const slides: HTMLElement[] = [];
+    let current: HTMLElement | null = null;
+
+    for (const child of children) {
+      if (child.tagName === 'H3') {
+        current = document.createElement('div');
+        current.className = 'phase-carousel-slide';
+        slides.push(current);
+      }
+      current?.appendChild(child);
+    }
+    slides.forEach((slide) => slidesContainer.appendChild(slide));
+
+    if (slides.length === 0) return;
+
+    const idOf = (slide: HTMLElement) => slide.querySelector('[id]')?.id ?? '';
+    const titleOf = (slide: HTMLElement) => slide.querySelector('h3')?.textContent?.trim() ?? '';
+    const indexForId = (id: string) => slides.findIndex((slide) => idOf(slide) === id);
+
+    let activeIndex = 0;
+
+    const dots = slides.map((slide, i) => {
+      if (!dotsContainer) return null;
+      const id = idOf(slide);
+      const status = meta.find((m) => m.id === id)?.status ?? 'done';
+      const dot = document.createElement('button');
+      dot.type = 'button';
+      dot.className = 'phase-carousel-dot';
+      dot.dataset.status = status;
+      dot.setAttribute('role', 'tab');
+      dot.setAttribute('aria-label', titleOf(slide) || `Phase ${i + 1}`);
+      dot.addEventListener('click', () => goTo(i));
+      dotsContainer.appendChild(dot);
+      return dot;
+    });
+
+    const show = (index: number, options: { scroll?: boolean } = {}) => {
+      activeIndex = Math.max(0, Math.min(index, slides.length - 1));
+      slides.forEach((slide, i) => {
+        slide.hidden = i !== activeIndex;
+      });
+      if (currentEl) {
+        currentEl.textContent = `${activeIndex + 1}/${slides.length} — ${titleOf(slides[activeIndex])}`;
+      }
+      dots.forEach((dot, i) => dot?.setAttribute('aria-selected', String(i === activeIndex)));
+      prevBtn.disabled = activeIndex === 0;
+      nextBtn.disabled = activeIndex === slides.length - 1;
+      if (options.scroll) {
+        // Scroll the whole card (nav + dots + content) into view, not just the
+        // heading — otherwise the nav bar that shows which step you're on ends
+        // up scrolled above the sticky site header, out of sight.
+        root.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+
+    // Prev/Next/dots are inside the widget itself, so it's already on screen
+    // when clicked — no need to scroll. Scrolling is only for jumps that
+    // originate outside the widget (a deep link or the top phase-summary
+    // carousel's anchor links), handled below via hashchange/initial load.
+    const goTo = (index: number) => {
+      show(index);
+      const id = idOf(slides[activeIndex]);
+      if (id) history.replaceState(null, '', `#${id}`);
+    };
+
+    const initialId = window.location.hash.replace('#', '');
+    const initialIndex = initialId ? indexForId(initialId) : -1;
+    show(initialIndex >= 0 ? initialIndex : 0, { scroll: initialIndex >= 0 });
+
+    prevBtn.addEventListener('click', () => goTo(activeIndex - 1));
+    nextBtn.addEventListener('click', () => goTo(activeIndex + 1));
+
+    window.addEventListener('hashchange', () => {
+      const index = indexForId(window.location.hash.replace('#', ''));
+      if (index >= 0) show(index, { scroll: true });
+    });
+  });
+</script>

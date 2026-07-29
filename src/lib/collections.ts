@@ -15,6 +15,16 @@ export async function getPublishedJournalEntries(): Promise<CollectionEntry<'jou
   return entries.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 }
 
+export async function getJournalEntriesForPhase(
+  projectSlug: string,
+  phaseId: string
+): Promise<CollectionEntry<'journal'>[]> {
+  const entries = await getPublishedJournalEntries();
+  return entries
+    .filter((entry) => entry.data.relatedProjectSlug?.id === projectSlug && entry.data.projectPhaseId === phaseId)
+    .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf());
+}
+
 export async function getPublishedNotes(): Promise<CollectionEntry<'notes'>[]> {
   const entries = await getCollection('notes', ({ data }) => !isProd || data.status !== 'draft');
   return entries.sort((a, b) => b.data.lastUpdated.valueOf() - a.data.lastUpdated.valueOf());

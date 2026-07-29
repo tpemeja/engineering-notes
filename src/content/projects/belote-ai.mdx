@@ -1,0 +1,288 @@
+---
+title: 'Belote AI'
+description: 'Game AI project: implementing Belote as an OpenSpiel game and building search- and learning-based agents to play it well.'
+status: active
+startDate: 2026-07-24
+technologies:
+  [
+    'Python',
+    'OpenSpiel',
+    'PyTorch',
+    'ISMCTS',
+    'OpenSkill',
+  ]
+technologyNotes:
+  - name: 'Python'
+    context: 'The language OpenSpiel and the whole evaluation harness are
+      written in.'
+  - name: 'OpenSpiel'
+    context: 'The game-engine framework Belote is implemented as a game
+      inside of, instead of a bespoke engine (see General decisions).'
+  - name: 'PyTorch'
+    context: 'Backs the learned value network from the Guided rollout
+      phase, which is still losing to RandomISMCTS.'
+  - name: 'ISMCTS'
+    context: "OpenSpiel's information-set MCTS algorithm — the strongest
+      agent family in the project so far."
+  - name: 'OpenSkill'
+    context: 'Powers round-robin pool ratings for multi-agent comparison,
+      chosen over TrueSkill (see General decisions).'
+githubUrl: 'https://github.com/tpemeja/belote-ai'
+phases:
+  - id: 'phase-0'
+    status: 'done'
+    summary: 'Built a correct, seedable Belote engine and a full evaluation
+      harness (match evaluation, decision scoring, rules tests, throughput)
+      before writing any competitive agent.'
+  - id: 'rulevalidbot'
+    status: 'done'
+    summary: 'Fixed bidding/play heuristics as the first real agent, beating
+      the random baseline by +13.92 pts/deal.'
+  - id: 'card-play-strategy'
+    status: 'done'
+    summary: 'A partner-aware, win-cheaply-or-discard-low strategy beating the
+      best baseline so far by +50.58 pts/deal (78.8% win rate).'
+  - id: 'ismcts'
+    status: 'done'
+    summary: "OpenSpiel's information-set MCTS, with a from-scratch
+      resampler to keep sampled worlds consistent with what's actually been
+      seen so far."
+  - id: 'guided-rollout-value-function'
+    status: 'in-progress'
+    summary: 'Testing whether a heuristic or learned rollout policy beats
+      ISMCTS default rollouts. Both are currently statistically
+      indistinguishable from it.'
+relatedNotesSlugs: []
+order: 10
+progress: 45
+---
+
+import Callout from '../../components/content/Callout.astro';
+import PhaseJournal from '../../components/content/PhaseJournal.astro';
+import PhaseCarousel from '../../components/content/PhaseCarousel.astro';
+import TechStack from '../../components/content/TechStack.astro';
+
+## Overview
+
+The French trick-taking card game Belote is implemented as
+a proper [OpenSpiel](https://github.com/google-deepmind/open_spiel) game
+(chance-based dealing, imperfect information enforced by the framework, a
+flat action space covering bidding and card play). 
+
+Every agent built on top of it, from uniform random up to a PyTorch value 
+network are compared against the others through a seeded, confidence-interval-backed 
+evaluation harness rather than a handful of "it felt stronger" test games. 
+
+A longer-term goal is bringing LLMs into that same comparison, not just to see
+how they rank against other agents, but whether they can actually pull off Belote's 
+tactical plays, like an *appel* (calling for a suit via a discard signal) or an 
+*impasse* (a betting on where a specific card sits).
+
+## Problem
+
+Belote didn't exist as an OpenSpiel game, but the harder problem was proving
+that any agent built for it was actually better than the last one :
+
+- **No existing implementation.** Belote has no OpenSpiel game to build or
+  benchmark agents against in the first place.
+- **Evaluation noise compounds with imperfect information.** Small-sample
+  results can look like real improvements until the sample size grows, and
+  Belote's chance-based dealing and hidden hands push variance up further.
+  So a *trustworthy* comparison needs enough seeded deals to be genuinely
+  expensive to run.
+- **Win rate alone won't reveal *how* an LLM plays.** Comparing an LLM against
+  the other agents isn't just about who wins, it's whether the LLM can
+  execute known tactical plays like an *appel* or an *impasse* at all, which
+  an aggregate points margin can't show. That needs per-decision scoring
+  against known-good tactical baselines, and LLM calls are too slow and
+  expensive to lean on thousands of simulated deals per comparison the way
+  ISMCTS or a value network can.
+
+Any one of these is manageable alone, but together they mean win rate over a 
+batch of games isn't enough. It needs a real implementation to run games on, 
+enough seeded samples to separate skill from noise, and a way to score 
+individual decisions for agents (such as an LLM) or human players, 
+who can't realistically be evaluated over thousands of deals. 
+That's why the evaluation harness became the first deliverable rather than 
+an afterthought bolted on once agents existed.
+
+## Phases
+
+Five phases so far, from a uniform-random baseline to a learned value network:
+
+<PhaseCarousel phases={frontmatter.phases}>
+
+### Phase 0: the measurement harness |#phase-0|
+
+<PhaseJournal projectSlug="belote-ai" phaseId="phase-0" />
+
+Shipped no competitive agent at all — only a correct, seedable game engine,
+trivial baseline bots, and four measurement modules: agent-vs-agent match
+evaluation (paired/duplicate deals, win rate, points margin, 95% CIs,
+OpenSkill ratings for round-robin pools), decision-quality scoring against a
+small hand-authored fixture set, rules-correctness tests (OpenSpiel's
+built-in `random_sim_test` and golden playthroughs, plus Hypothesis property
+tests for Belote-specific invariants like "points always sum to 162"), and
+throughput benchmarking. The harness was calibrated against itself first: a
+random-vs-random match confirmed the reported margin was statistically flat
+before any agent claim was allowed to rest on it.
+
+<Callout variant="decision" title="Evaluate per-deal points margin, not games to a target score">
+  Belote is normally played as a series of deals to a target score (e.g. 501),
+  but the harness scores a single deal's points margin as the unit of
+  comparison. This is lower-variance and gives simpler confidence intervals
+  than simulating full games, at the cost of not directly measuring
+  game-winning strategy (e.g. knowing when to play conservatively while ahead).
+</Callout>
+
+### RuleValidBot |#rulevalidbot|
+
+<PhaseJournal projectSlug="belote-ai" phaseId="rulevalidbot" />
+
+Fixed bidding/play heuristics as the first real agent, beating the random
+baseline by +13.92 pts/deal (paired).
+
+### Card-play strategy |#card-play-strategy|
+
+<PhaseJournal projectSlug="belote-ai" phaseId="card-play-strategy" />
+
+A partner-aware, win-cheaply-or-discard-low strategy beating the
+highest-value baseline by +50.58 pts/deal (78.8% win rate).
+
+### ISMCTS |#ismcts|
+
+<PhaseJournal projectSlug="belote-ai" phaseId="ismcts" />
+
+OpenSpiel's information-set MCTS, which required implementing
+`resample_from_infostate` on `BeloteState` from scratch — uniform sampling
+wasn't enough, it needed to respect suit-following/over-trump history to
+produce *consistent* worlds.
+
+<Callout variant="lesson" title="Plain MCTSBot silently cheats on imperfect-information games">
+  OpenSpiel's `MCTSBot` doesn't reject imperfect-information games outright —
+  it runs against Belote without error. But `BeloteState` stores all four
+  hands as plain visible attributes, so MCTS's tree search has full access to
+  opponents' hidden cards during rollout. An omniscient bot in an evaluation
+  pool produces misleading win-rate and Elo numbers for *every other* agent it
+  plays against, not just itself. `ISMCTSBot`, which samples consistent worlds
+  via `resample_from_infostate` instead of looking at the true state, is the
+  only MCTS-family bot allowed in the project as a result.
+</Callout>
+
+<Callout variant="lesson" title="A second hidden RNG was silently breaking reproducibility">
+  While hardening ISMCTS, a second, independent source of randomness was found
+  quietly making runs non-reproducible even with a fixed seed — on top of an
+  earlier randomness bug in `ISMCTSBot` itself that was fixed by implementing a
+  seeded resampler. Seeding one obvious entry point isn't enough to guarantee
+  reproducibility in a system with multiple stochastic components; every
+  source needs to be found and pinned independently.
+</Callout>
+
+### Guided rollout & learned value function |#guided-rollout-value-function|
+
+<PhaseJournal projectSlug="belote-ai" phaseId="guided-rollout-value-function" />
+
+Exploring whether a heuristic or learned rollout policy beats ISMCTS's
+default random rollouts. Both are currently inconclusive (see
+[Future improvements](#future-improvements) below).
+
+<Callout variant="lesson" title="A promising small-sample result didn't survive more data">
+  An epsilon-greedy guided rollout looked like a real improvement over ISMCTS's
+  default rollout at N=1,000 simulated deals (+1.13 pts/deal), but regressed to
+  a statistically-indistinguishable -0.27 at N=10,000, with confidence
+  intervals overlapping zero. Random, deterministic, and epsilon=0.3 rollouts
+  all turned out to be indistinguishable at the tested simulation budget — a
+  concrete example of why the harness reports confidence intervals rather than
+  point estimates, and why a result needs to survive a larger sample before
+  it's trusted.
+</Callout>
+
+</PhaseCarousel>
+
+## Architecture
+
+The game engine (`BeloteGame`/`BeloteState`) lives in a personal OpenSpiel
+fork rather than in `belote-ai` itself — a deliberate decision to build on
+OpenSpiel's existing imperfect-information machinery and agent library
+(uniform random, MCTS, ISMCTS, the CFR family) instead of re-implementing all
+of that from scratch. `belote-ai` depends on the fork as an editable/path
+install and owns only:
+
+```
+belote/
+├── agents/
+│   ├── registry.py         # name -> pyspiel.Bot factory
+│   └── rule_valid_bot.py
+├── eval/
+│   ├── match.py            # evaluate_bots wrapper: duplicate deals, CIs, Elo
+│   ├── decision.py         # decision-quality scoring
+│   └── throughput.py       # games/sec benchmark
+├── cli.py
+└── tests/
+```
+
+Agents implement OpenSpiel's `Bot` contract directly (`step`, `restart_at`,
+optional `inform_action`) rather than a bespoke interface, so legality is
+enforced by `state.legal_actions()` and information hiding is enforced by
+OpenSpiel itself — an agent only ever sees its own information state, never
+the full game state, so it's structurally impossible for a correctly-written
+bot to cheat.
+
+## Tech stack
+
+What each piece of the stack is actually doing, and where to look for more:
+
+<TechStack notes={frontmatter.technologyNotes} />
+
+## General decisions
+
+Standing, project-wide choices that aren't tied to a single phase.
+
+<Callout variant="decision" title="Build on OpenSpiel instead of a bespoke game engine">
+  Belote is implemented as an OpenSpiel game rather than a standalone engine,
+  inheriting its imperfect-information state model, a large library of
+  ready-made agents (random, MCTS, ISMCTS, CFR), `evaluate_bots` for
+  agent-vs-agent play, and built-in correctness tooling (`random_sim_test`,
+  golden playthroughs). The trade-off: the game lives in a personal fork of
+  OpenSpiel (`python_belote` isn't upstream yet), so belote-ai's
+  reproducibility is currently tied to a pinned commit of that fork rather than
+  a released package, until the game is upstreamed.
+</Callout>
+
+<Callout variant="decision" title="OpenSkill over TrueSkill for multi-agent ratings">
+  OpenSkill was chosen for round-robin pool ratings over Microsoft's TrueSkill
+  because it's MIT-licensed and patent-free, and it models team games (Belote's
+  2v2 structure) natively rather than requiring a workaround.
+</Callout>
+
+<Callout variant="decision" title="Cap redeals instead of matching the official unlimited-redeal rule">
+  If both bidding rounds end with everyone passing, official rules redeal
+  indefinitely. The harness caps this at 10 attempts and treats an
+  all-attempts-exhausted deal as a flat draw (all four `returns()` are 0)
+  rather than an error — a deliberate, documented deviation from the official
+  rules, made because every evaluation module needs a well-defined outcome for
+  every deal, and an unbounded loop doesn't provide one.
+</Callout>
+
+## Approach
+
+Every phase above was built and evaluated against the harness before moving
+to the next, rather than assumed. That discipline paid for itself
+repeatedly: it caught a plain-MCTSBot "cheat" (full hand visibility during
+rollout), a hidden RNG silently breaking reproducibility, and a promising
+epsilon-greedy result that looked real at 1,000 simulated deals but
+collapsed to statistically indistinguishable at 10,000 — each one caught
+before it could be mistaken for real progress.
+
+## Future improvements
+
+The immediate open problem is the learned value network (Guided rollout &
+learned value function phase above), which is still losing decisively to
+RandomISMCTS and shows two tangled issues: likely distribution shift between
+the self-play data it was trained on and the positions it's evaluated on, and
+clear overfitting (test loss plateaus around epoch 35 while training
+continues to 200 with no early stopping). Isolating those two independently
+is the next step, before deciding whether the value function is a viable
+replacement for ISMCTS's rollouts at all. Longer term, the goal is to
+upstream `python_belote` into `google-deepmind/open_spiel` so the project no
+longer depends on a personal fork for its core game implementation.

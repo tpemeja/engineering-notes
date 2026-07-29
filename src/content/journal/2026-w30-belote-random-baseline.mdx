@@ -1,0 +1,46 @@
+---
+title: 'Belote AI: random vs random baseline'
+date: 2026-07-24
+period: '2026-W30'
+tags: ['Belote AI', 'OpenSpiel', 'Testing']
+summary: 'Got a legal, seedable Belote game running in OpenSpiel and used a uniform-random-vs-random match as the first sanity check on the evaluation harness itself.'
+relatedProjectSlug: 'belote-ai'
+projectPhaseId: 'phase-0'
+draft: false
+---
+
+## What I worked on
+
+Before writing any competitive agent, I got `BeloteGame`/`BeloteState` far
+enough along in the OpenSpiel fork to deal cards, enforce bidding, and play
+out legal tricks to a scored terminal state. With that in place, I wrote the
+first version of the match evaluator and ran uniform-random players against
+each other over a batch of seeded deals — no strategy at all, just legal
+random actions on both sides.
+
+## Challenges encountered
+
+The random-vs-random matchup isn't interesting on its own, but it's the
+cheapest possible check that the harness itself isn't lying: with no skill
+difference between the two sides, the reported points margin should be
+statistically indistinguishable from zero. Getting the paired-seed dealing
+right (both sides seeing the same deals so variance from the deck doesn't
+swamp the signal) took a couple of passes — an early version reused a single
+RNG stream across both players' decisions, which very subtly biased whoever
+acted first on tie-breaks.
+
+## What I learned
+
+A measurement tool that hasn't been shown to report "no difference" when
+there genuinely is no difference can't be trusted to report a real
+difference later. Random-vs-random isn't a throwaway smoke test — it's the
+zero-baseline the whole evaluation harness gets calibrated against before any
+agent claim is allowed to rest on it.
+
+## Next steps
+
+- Add `RuleValidBot` (fixed bidding/play heuristics) and evaluate it against
+  the random baseline.
+- Add the 95% confidence interval and OpenSkill rating output to the match
+  evaluator so later agent-vs-agent comparisons aren't eyeballed off raw win
+  rate.

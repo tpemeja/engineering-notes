@@ -14,6 +14,8 @@ export const NOTE_CATEGORIES = [
   'APIs',
 ] as const;
 
+export const PHASE_STATUSES = ['planned', 'in-progress', 'done'] as const;
+
 const projects = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/projects' }),
   schema: ({ image }) =>
@@ -23,15 +25,25 @@ const projects = defineCollection({
       status: z.enum(['active', 'paused', 'completed']),
       startDate: z.coerce.date(),
       endDate: z.coerce.date().optional(),
-      overview: z.string(),
-      problem: z.string(),
-      solution: z.string(),
-      architecture: z.string().optional(),
       technologies: z.array(z.string()).default([]),
-      lessonsLearned: z.string(),
-      futureImprovements: z.string(),
+      technologyNotes: z
+        .array(
+          z.object({
+            name: z.string(),
+            context: z.string(),
+          })
+        )
+        .default([]),
       githubUrl: z.url().optional(),
-      relatedJournalSlugs: z.array(reference('journal')).default([]),
+      phases: z
+        .array(
+          z.object({
+            id: z.string(),
+            status: z.enum(PHASE_STATUSES),
+            summary: z.string(),
+          })
+        )
+        .default([]),
       relatedNotesSlugs: z.array(reference('notes')).default([]),
       coverImage: image().optional(),
       order: z.number().default(0),
@@ -48,6 +60,7 @@ const journal = defineCollection({
     tags: z.array(z.string()).default([]),
     summary: z.string(),
     relatedProjectSlug: reference('projects').optional(),
+    projectPhaseId: z.string().optional(),
     draft: z.boolean().default(false),
   }),
 });
