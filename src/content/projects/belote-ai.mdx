@@ -29,11 +29,9 @@ technologyNotes:
       chosen over TrueSkill (see General decisions).'
 githubUrl: 'https://github.com/tpemeja/belote-ai'
 phases:
-  - id: 'phase-0'
+  - id: 'game-implementation'
     status: 'done'
-    summary: 'Built a correct, seedable Belote engine and a full evaluation
-      harness (match evaluation, decision scoring, rules tests, throughput)
-      before writing any competitive agent.'
+    summary: 'Create in OpenSpiel a correct, seedable Belote engine.'
   - id: 'rulevalidbot'
     status: 'done'
     summary: 'Fixed bidding/play heuristics as the first real agent, beating
@@ -61,6 +59,7 @@ import Callout from '../../components/content/Callout.astro';
 import PhaseJournal from '../../components/content/PhaseJournal.astro';
 import PhaseCarousel from '../../components/content/PhaseCarousel.astro';
 import TechStack from '../../components/content/TechStack.astro';
+import ObjectDiagram from '../../components/content/ObjectDiagram.astro';
 
 ## Overview
 
@@ -112,20 +111,69 @@ Five phases so far, from a uniform-random baseline to a learned value network:
 
 <PhaseCarousel phases={frontmatter.phases}>
 
-### Phase 0: the measurement harness |#phase-0|
+### Game Implementation |#game-implementation|
 
-<PhaseJournal projectSlug="belote-ai" phaseId="phase-0" />
+Belote is not part of the supported games in `OpenSpiel`. So the first part of the project is to
+fork OpenSpiel and add a Belote implementation to it, well-tested, optimized, and documented
+enough to eventually open a pull request back upstream. As I am more confident in Python, I
+start there, planning to convert it to C++ later.
 
-Shipped no competitive agent at all — only a correct, seedable game engine,
-trivial baseline bots, and four measurement modules: agent-vs-agent match
-evaluation (paired/duplicate deals, win rate, points margin, 95% CIs,
-OpenSkill ratings for round-robin pools), decision-quality scoring against a
-small hand-authored fixture set, rules-correctness tests (OpenSpiel's
-built-in `random_sim_test` and golden playthroughs, plus Hypothesis property
-tests for Belote-specific invariants like "points always sum to 162"), and
-throughput benchmarking. The harness was calibrated against itself first: a
-random-vs-random match confirmed the reported margin was statistically flat
-before any agent claim was allowed to rest on it.
+To implement the game in `OpenSpiel`, two objects need to be defined: 
+- `Game`, which is relatively simple and only contains the parameters of the game.
+- `State`, which contains all the game logic, including how the game is organized, the rules, and the scoring.
+
+<ObjectDiagram
+  arrowLabel="constructs"
+  nodes={[
+    {
+      name: 'Game',
+      fields: [
+        { name: 'dealer', detail: 'ID of the player who deals' },
+        { name: 'max_redeals', detail: 'cap on redeals if everyone passes' },
+      ],
+    },
+    {
+      name: 'State',
+      fields: [
+        {
+          name: 'game logic',
+          detail: 'bidding rounds, redeals, turn order, trick resolution',
+        },
+        { name: 'rules', detail: 'official FFBelote rules, incl. Belote/Rebelote' },
+        {
+          name: 'scoring',
+          detail: 'capots, dedans, belote bonus; centered at 0 for RL',
+        },
+        {
+          name: 'resampler',
+          detail:
+            "clones opponent hands, resampled but consistent with what's been observed",
+        },
+      ],
+    },
+  ]}
+/>
+
+<Callout variant="decision" title="A single-hand game, with no target score to reach">
+  Belote is normally played as a series of deals up to a target score, but the game was scoped to
+  a single hand instead, to keep clearer boundaries and faster evaluation for the learning
+  algorithms built on top of it. More parameters may be added later, but `dealer` and
+  `max_redeals` were enough for a first implementation.
+</Callout>
+
+For the game rules, I decided to implement the [official FFBelote rules](https://www.ffbelote.org/wp-content/uploads/2016/01/regles-officielles-de-la-Belote-27-01-2016.pdf).
+This includes Belote/Rebelote, which is automatically declared by the game engine for simplicity, without relying on player declarations.
+OpenSpiel already supports non-deterministic games by defining randomness through chance nodes/players; in this case, that node is only in charge of dealing the cards.
+Scoring also needed some decisions: for the game score, I followed the official rules, with capots, dedans, and the belote bonus points, but for reinforcement learning, following other already-implemented games like Bridge, I used a score centered at 0 (`score = own_team_points − opponent_team_points`).
+
+The last important point for this section is how the `resample_from_infostate` function is defined, and its purpose.
+This function's goal is to return a clone of the other players' hands, resampled but kept consistent with the asking player's information state.
+For a perfect-information game this is easy, since it's the same state, but for a game like Belote, which is an imperfect-information game, it's more complicated.
+I first started simply by resampling the not-yet-played cards randomly among the other players, but I decided to make it more accurate by adding all the information the
+player could have gathered, even though that also simplifies player reasoning. This additional info includes the maximum trump card, voids, and the second card in case belote has been announced.
+
+The game has been fully implemented in Python and tests have been created. I opened an issue in the official GitHub repository to ask some details for the pull request (https://github.com/google-deepmind/open_spiel/issues/1577).
+Before creating the PR, I will need to work on the C++ implementation for compute optimization. It will be a good opportunity to review C++ and compare the difference in performance.
 
 <Callout variant="decision" title="Evaluate per-deal points margin, not games to a target score">
   Belote is normally played as a series of deals to a target score (e.g. 501),

@@ -1,0 +1,115 @@
+---
+interface Field {
+  name: string;
+  detail?: string;
+}
+
+interface Node {
+  name: string;
+  fields: Field[];
+}
+
+interface Props {
+  nodes: Node[];
+  arrowLabel?: string;
+}
+
+const { nodes, arrowLabel } = Astro.props;
+---
+
+<div class="not-prose object-diagram">
+  {
+    nodes.map((node, i) => (
+      <>
+        {i > 0 && (
+          <div class="object-diagram-arrow">
+            <span aria-hidden="true">↓</span>
+            {arrowLabel && <span class="object-diagram-arrow-label">{arrowLabel}</span>}
+          </div>
+        )}
+        <div class="object-diagram-node">
+          <p class="object-diagram-name">{node.name}</p>
+          <ul class="object-diagram-fields">
+            {node.fields.map((field) => (
+              <li>
+                <span class="object-diagram-field-name">{field.name}</span>
+                {field.detail && (
+                  <span class="object-diagram-field-detail"> — {field.detail}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      </>
+    ))
+  }
+</div>
+
+<style>
+  .object-diagram {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-block: 1.5rem;
+  }
+
+  .object-diagram-node {
+    width: max-content;
+    max-width: 100%;
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-subtle);
+    border-radius: 0.5rem;
+    padding: 1.25rem 1.5rem;
+  }
+
+  .object-diagram-name {
+    margin: 0 0 0.65rem 0;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 1.25rem;
+    color: var(--color-accent);
+  }
+
+  .object-diagram-fields {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .object-diagram-fields li {
+    font-size: 1rem;
+    line-height: 1.5;
+    white-space: nowrap;
+  }
+
+  .object-diagram-field-name {
+    font-family: var(--font-mono);
+    color: var(--color-fg);
+  }
+
+  .object-diagram-field-detail {
+    color: var(--color-fg-muted);
+  }
+
+  .object-diagram-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1.1;
+    color: var(--color-fg-muted);
+    font-size: 0.9375rem;
+    padding-block: 0.4rem;
+  }
+
+  .object-diagram-arrow span[aria-hidden] {
+    font-size: 1.5rem;
+  }
+
+  .object-diagram-arrow-label {
+    font-style: italic;
+  }
+</style>
