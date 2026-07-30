@@ -159,7 +159,7 @@ To implement the game in `OpenSpiel`, two objects need to be defined:
 
 ---
 
-Rules and dealing follow the [official FFBelote rules](https://www.ffbelote.org/wp-content/uploads/2016/01/regles-officielles-de-la-Belote-27-01-2016.pdf); OpenSpiel already supports non-deterministic games via chance nodes/players, and here that node is only in charge of dealing the cards.
+Rules and dealing follow the [official FFBelote rules](https://www.ffbelote.org/wp-content/uploads/2016/01/regles-officielles-de-la-Belote-27-01-2016.pdf). OpenSpiel already supports non-deterministic games via chance nodes/players, and here that node is only in charge of dealing the cards.
 A few things still needed a deliberate call:
 
 <DecisionTable
@@ -168,7 +168,7 @@ A few things still needed a deliberate call:
       label: 'Game scope',
       chose: 'Single deal',
       insteadOf: 'Full game to a target score (e.g. 501)',
-      why: "Lower variance and simpler confidence intervals — at the cost of not directly measuring game-winning strategy (e.g. playing conservatively while ahead).",
+      why: "Lower variance and simpler confidence intervals at the cost of not directly measuring game-winning strategy (e.g. playing conservatively while ahead).",
     },
     {
       label: 'Rule fidelity',
@@ -188,7 +188,7 @@ A few things still needed a deliberate call:
 ---
 
 The last important point for this section is how `resample_from_infostate` is defined, and its purpose: returning a clone of the other players' hands, resampled but kept consistent with the asking player's information state.
-For a perfect-information game this is easy, since it's the same state, but for an imperfect-information game like Belote it's more complicated — resampling started out naive and was extended once it under-used what a player could actually infer:
+For a perfect-information game this is easy, since it's the same state, but for an imperfect-information game like Belote it's more complicated. Resampling started out naive and was extended once it under-used what a player could actually infer:
 
 <ObjectDiagram
   arrowLabel="+ observed signals"
@@ -205,7 +205,10 @@ For a perfect-information game this is easy, since it's the same state, but for 
     {
       name: 'Informed resample',
       fields: [
-        { name: 'max trump card', detail: "the strongest trump not yet ruled out" },
+        {
+          name: 'max trump card',
+          detail: "inferred: a player who didn't over-trump holds no higher trump",
+        },
         { name: 'voids', detail: 'suits a player is known not to hold' },
         {
           name: '2nd belote card',
@@ -218,7 +221,8 @@ For a perfect-information game this is easy, since it's the same state, but for 
 
 ---
 
-The game has been fully implemented in Python and tests have been created. I opened an issue in the official GitHub repository to ask some details for the pull request (https://github.com/google-deepmind/open_spiel/issues/1577).
+The game has been fully implemented in Python and tests have been created. I opened an issue in the official GitHub repository to ask some details for the pull request ([Add game "Belote"
+#1577](https://github.com/google-deepmind/open_spiel/issues/1577)).
 Before creating the PR, I will need to work on the C++ implementation for compute optimization. It will be a good opportunity to review C++ and compare the difference in performance.
 
 ### RuleValidBot |#rulevalidbot|
