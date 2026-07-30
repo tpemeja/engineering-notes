@@ -60,6 +60,7 @@ import PhaseJournal from '../../components/content/PhaseJournal.astro';
 import PhaseCarousel from '../../components/content/PhaseCarousel.astro';
 import TechStack from '../../components/content/TechStack.astro';
 import ObjectDiagram from '../../components/content/ObjectDiagram.astro';
+import DecisionTable from '../../components/content/DecisionTable.astro';
 
 ## Overview
 
@@ -118,6 +119,8 @@ fork OpenSpiel and add a Belote implementation to it, well-tested, optimized, an
 enough to eventually open a pull request back upstream. As I am more confident in Python, I
 start there, planning to convert it to C++ later.
 
+---
+
 To implement the game in `OpenSpiel`, two objects need to be defined: 
 - `Game`, which is relatively simple and only contains the parameters of the game.
 - `State`, which contains all the game logic, including how the game is organized, the rules, and the scoring.
@@ -154,34 +157,69 @@ To implement the game in `OpenSpiel`, two objects need to be defined:
   ]}
 />
 
-<Callout variant="decision" title="A single-hand game, with no target score to reach">
-  Belote is normally played as a series of deals up to a target score, but the game was scoped to
-  a single hand instead, to keep clearer boundaries and faster evaluation for the learning
-  algorithms built on top of it. More parameters may be added later, but `dealer` and
-  `max_redeals` were enough for a first implementation.
-</Callout>
+---
 
-For the game rules, I decided to implement the [official FFBelote rules](https://www.ffbelote.org/wp-content/uploads/2016/01/regles-officielles-de-la-Belote-27-01-2016.pdf).
-This includes Belote/Rebelote, which is automatically declared by the game engine for simplicity, without relying on player declarations.
-OpenSpiel already supports non-deterministic games by defining randomness through chance nodes/players; in this case, that node is only in charge of dealing the cards.
-Scoring also needed some decisions: for the game score, I followed the official rules, with capots, dedans, and the belote bonus points, but for reinforcement learning, following other already-implemented games like Bridge, I used a score centered at 0 (`score = own_team_points − opponent_team_points`).
+Rules and dealing follow the [official FFBelote rules](https://www.ffbelote.org/wp-content/uploads/2016/01/regles-officielles-de-la-Belote-27-01-2016.pdf); OpenSpiel already supports non-deterministic games via chance nodes/players, and here that node is only in charge of dealing the cards.
+A few things still needed a deliberate call:
 
-The last important point for this section is how the `resample_from_infostate` function is defined, and its purpose.
-This function's goal is to return a clone of the other players' hands, resampled but kept consistent with the asking player's information state.
-For a perfect-information game this is easy, since it's the same state, but for a game like Belote, which is an imperfect-information game, it's more complicated.
-I first started simply by resampling the not-yet-played cards randomly among the other players, but I decided to make it more accurate by adding all the information the
-player could have gathered, even though that also simplifies player reasoning. This additional info includes the maximum trump card, voids, and the second card in case belote has been announced.
+<DecisionTable
+  decisions={[
+    {
+      label: 'Game scope',
+      chose: 'Single deal',
+      insteadOf: 'Full game to a target score (e.g. 501)',
+      why: "Lower variance and simpler confidence intervals — at the cost of not directly measuring game-winning strategy (e.g. playing conservatively while ahead).",
+    },
+    {
+      label: 'Rule fidelity',
+      chose: 'Official rules, incl. auto-declared Belote/Rebelote',
+      insteadOf: 'Relying on player declarations',
+      why: 'Simplicity: the engine declares it for the player instead of trusting a signal.',
+    },
+    {
+      label: 'RL scoring',
+      chose: 'score = own_team_points − opponent_team_points',
+      insteadOf: 'Raw official point totals (capots, dedans, belote bonus)',
+      why: 'Centered-at-0 score matches the convention used by other OpenSpiel games like Bridge; official points are still used for the game score itself.',
+    },
+  ]}
+/>
+
+---
+
+The last important point for this section is how `resample_from_infostate` is defined, and its purpose: returning a clone of the other players' hands, resampled but kept consistent with the asking player's information state.
+For a perfect-information game this is easy, since it's the same state, but for an imperfect-information game like Belote it's more complicated — resampling started out naive and was extended once it under-used what a player could actually infer:
+
+<ObjectDiagram
+  arrowLabel="+ observed signals"
+  nodes={[
+    {
+      name: 'Naive resample',
+      fields: [
+        {
+          name: 'unplayed cards',
+          detail: 'resampled uniformly at random among the other players',
+        },
+      ],
+    },
+    {
+      name: 'Informed resample',
+      fields: [
+        { name: 'max trump card', detail: "the strongest trump not yet ruled out" },
+        { name: 'voids', detail: 'suits a player is known not to hold' },
+        {
+          name: '2nd belote card',
+          detail: 'known once Belote/Rebelote has been announced',
+        },
+      ],
+    },
+  ]}
+/>
+
+---
 
 The game has been fully implemented in Python and tests have been created. I opened an issue in the official GitHub repository to ask some details for the pull request (https://github.com/google-deepmind/open_spiel/issues/1577).
 Before creating the PR, I will need to work on the C++ implementation for compute optimization. It will be a good opportunity to review C++ and compare the difference in performance.
-
-<Callout variant="decision" title="Evaluate per-deal points margin, not games to a target score">
-  Belote is normally played as a series of deals to a target score (e.g. 501),
-  but the harness scores a single deal's points margin as the unit of
-  comparison. This is lower-variance and gives simpler confidence intervals
-  than simulating full games, at the cost of not directly measuring
-  game-winning strategy (e.g. knowing when to play conservatively while ahead).
-</Callout>
 
 ### RuleValidBot |#rulevalidbot|
 

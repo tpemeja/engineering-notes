@@ -1,0 +1,95 @@
+---
+interface Decision {
+  label: string;
+  chose: string;
+  insteadOf: string;
+  why: string;
+}
+
+interface Props {
+  decisions: Decision[];
+}
+
+const { decisions } = Astro.props;
+---
+
+<div class="not-prose decision-table">
+  {
+    decisions.map((decision) => (
+      <div class="decision-row">
+        <p class="decision-label">{decision.label}</p>
+        <dl class="decision-details">
+          <div>
+            <dt>Chose</dt>
+            <dd class="decision-chose">{decision.chose}</dd>
+          </div>
+          <div>
+            <dt>Instead of</dt>
+            <dd>{decision.insteadOf}</dd>
+          </div>
+          <div>
+            <dt>Why</dt>
+            <dd>{decision.why}</dd>
+          </div>
+        </dl>
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .decision-table {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-block: 1.5rem;
+  }
+
+  .decision-row {
+    border: 1px solid var(--color-border);
+    background-color: var(--color-bg-subtle);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .decision-label {
+    margin: 0 0 0.6rem 0;
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.9375rem;
+    color: var(--color-accent);
+  }
+
+  .decision-details {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem 1.25rem;
+    margin: 0;
+  }
+
+  .decision-details dt {
+    margin: 0 0 0.15rem 0;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-fg-muted);
+  }
+
+  .decision-details dd {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    color: var(--color-fg);
+  }
+
+  .decision-chose {
+    font-family: var(--font-mono);
+  }
+
+  @media (max-width: 32rem) {
+    .decision-details {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
