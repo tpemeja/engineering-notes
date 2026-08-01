@@ -334,14 +334,18 @@ which is the correct answer.
   ]}
 />
 
-Ties only exist in the paired arm: a single-dealer deal always has some
-nonzero margin, so it always resolves win or loss, 0% ties in both
-single-dealer rows above. Pairing two deals introduces a third possible
-outcome: the two mirrored margins can cancel each other out exactly,
-landing on 0. That happened on 15.3% of paired deals here, and it's
-reported as its own outcome rather than dropped from the win-rate
-denominator, since it genuinely means neither team came out ahead across
-both mirrored plays.
+Both single-dealer rows show 0% ties because one deal can never land on an
+exact 0 margin. A made contract splits the points as actually won (say 90
+vs 72); a failed one sweeps everything to the defenders instead. Either way
+it's never perfectly even, since an 81-81 result is scored as a failed
+contract rather than a tie.
+
+The paired row's 15.3% is a different kind of tie: not one deal ending
+even, but two mirrored deals landing on equal and opposite margins (Team 0
+wins by X with dealer=0, Team 1 wins by that same X with dealer=1), which
+average out to exactly 0. It's reported as its own outcome rather than
+folded into the win-rate denominator, since it genuinely means neither team
+had a net edge across both plays.
 
 ---
 
