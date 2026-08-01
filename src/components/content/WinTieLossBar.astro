@@ -1,0 +1,134 @@
+---
+interface Row {
+  label: string;
+  team0: number;
+  tie: number;
+  team1: number;
+  highlight?: boolean;
+}
+
+interface Props {
+  rows: Row[];
+  team0Label: string;
+  team1Label: string;
+}
+
+const { rows, team0Label, team1Label } = Astro.props;
+const fmt = (v: number) => `${(v * 100).toFixed(1)}%`;
+---
+
+<div class="not-prose wtl-chart">
+  <div class="wtl-legend">
+    <span class="wtl-swatch wtl-swatch-team0"></span>
+    <span>{team0Label}</span>
+    <span class="wtl-swatch wtl-swatch-tie"></span>
+    <span>Tie</span>
+    <span class="wtl-swatch wtl-swatch-team1"></span>
+    <span>{team1Label}</span>
+  </div>
+
+  {
+    rows.map((r) => (
+      <div class="wtl-row">
+        <p class="wtl-label">{r.label}</p>
+        <div class:list={['wtl-bar', { 'wtl-bar-highlight': r.highlight }]}>
+          <span class="wtl-seg wtl-seg-team0" style={`width: ${r.team0 * 100}%`} />
+          <span class="wtl-seg wtl-seg-tie" style={`width: ${r.tie * 100}%`} />
+          <span class="wtl-seg wtl-seg-team1" style={`width: ${r.team1 * 100}%`} />
+        </div>
+        <p class="wtl-values">
+          {fmt(r.team0)} / {fmt(r.tie)} / {fmt(r.team1)}
+        </p>
+      </div>
+    ))
+  }
+</div>
+
+<style>
+  .wtl-chart {
+    margin-block: 1.5rem;
+  }
+
+  .wtl-legend {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.5rem;
+    margin-bottom: 1.1rem;
+    font-size: 0.8125rem;
+    color: var(--color-fg-muted);
+  }
+
+  .wtl-swatch {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 0.2rem;
+    margin-left: 0.5rem;
+  }
+
+  .wtl-swatch:first-child {
+    margin-left: 0;
+  }
+
+  .wtl-swatch-team0 {
+    background-color: var(--color-accent);
+  }
+
+  .wtl-swatch-tie {
+    background-color: var(--color-fg-muted);
+    opacity: 0.5;
+  }
+
+  .wtl-swatch-team1 {
+    background-color: var(--color-status-paused);
+  }
+
+  .wtl-row {
+    margin-block: 0.9rem;
+  }
+
+  .wtl-label {
+    margin: 0 0 0.3rem 0;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--color-fg);
+  }
+
+  .wtl-bar {
+    display: flex;
+    height: 1.15rem;
+    border-radius: 0.3rem;
+    overflow: hidden;
+    border: 1px solid var(--color-border);
+  }
+
+  .wtl-bar-highlight {
+    border-color: var(--color-accent);
+  }
+
+  .wtl-seg {
+    display: block;
+    height: 100%;
+  }
+
+  .wtl-seg-team0 {
+    background-color: var(--color-accent);
+  }
+
+  .wtl-seg-tie {
+    background-color: var(--color-fg-muted);
+    opacity: 0.5;
+  }
+
+  .wtl-seg-team1 {
+    background-color: var(--color-status-paused);
+  }
+
+  .wtl-values {
+    margin: 0.3rem 0 0 0;
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    color: var(--color-fg-muted);
+  }
+</style>

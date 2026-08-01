@@ -32,10 +32,13 @@ phases:
   - id: 'game-implementation'
     status: 'done'
     summary: 'Create in OpenSpiel a correct, seedable Belote engine.'
-  - id: 'rulevalidbot'
+  - id: 'simulation-harness'
     status: 'done'
-    summary: 'Fixed bidding/play heuristics as the first real agent, beating
-      the random baseline by +13.92 pts/deal.'
+    summary: 'Random-vs-random walking skeleton proving the harness itself:
+      dealer-mirrored matches, paired win/tie/loss stats, and a pilot-then-size
+      sample-size calculation instead of a guessed deal count. Result: -1.15
+      pts/deal, 95% CI [-4.47, +2.17] over 1,393 paired deals, statistically
+      indistinguishable from zero, as it should be for two identical bots.'
   - id: 'card-play-strategy'
     status: 'done'
     summary: 'A partner-aware, win-cheaply-or-discard-low strategy beating the
@@ -61,6 +64,9 @@ import PhaseCarousel from '../../components/content/PhaseCarousel.astro';
 import TechStack from '../../components/content/TechStack.astro';
 import ObjectDiagram from '../../components/content/ObjectDiagram.astro';
 import DecisionTable from '../../components/content/DecisionTable.astro';
+import ConfidenceIntervalChart from '../../components/content/ConfidenceIntervalChart.astro';
+import BranchDiagram from '../../components/content/BranchDiagram.astro';
+import WinTieLossBar from '../../components/content/WinTieLossBar.astro';
 
 ## Overview
 
@@ -225,12 +231,126 @@ The game has been fully implemented in Python and tests have been created. I ope
 #1577](https://github.com/google-deepmind/open_spiel/issues/1577)).
 Before creating the PR, I will need to work on the C++ implementation for compute optimization. It will be a good opportunity to review C++ and compare the difference in performance.
 
-### RuleValidBot |#rulevalidbot|
+### Simulation Harness |#simulation-harness|
 
-<PhaseJournal projectSlug="belote-ai" phaseId="rulevalidbot" />
+<PhaseJournal projectSlug="belote-ai" phaseId="simulation-harness" />
 
-Fixed bidding/play heuristics as the first real agent, beating the random
-baseline by +13.92 pts/deal (paired).
+Before writing any real agent, the harness itself needed proving: two
+`pyspiel` uniform-random bots played against each other over seeded deals,
+with the statistical machinery every later comparison depends on (paired
+matches, confidence intervals, sample sizing) built and validated here
+first instead of reinvented per phase.
+
+---
+
+A fixed dealer gives one team a permanent bidding-order advantage that would
+otherwise be indistinguishable from a real skill difference. The fix borrows
+duplicate bridge's trick: play the identical seed twice, dealer rotated one
+seat, and average the two margins.
+
+<BranchDiagram
+  source={{
+    name: 'Seed 42',
+    detail: 'Same chance seed, so the identical cards get dealt both times.',
+  }}
+  branchLabel="play the same deal twice, dealer rotated one seat"
+  branches={[
+    { name: 'dealer = 0', detail: "Team 0 bids and plays first, this deal's normal margin." },
+    { name: 'dealer = 1', detail: "Same deal, seats rotated one position: Team 1 bids and plays first instead, this deal's mirror margin." },
+  ]}
+  mergeLabel="average the two margins"
+  merge={{
+    name: 'Paired margin',
+    detail: '(normal + mirror) / 2, seat-order bias cancels out.',
+  }}
+/>
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Match design',
+      chose: 'Dealer-mirrored (paired) deals',
+      insteadOf: 'A single fixed-dealer match',
+      why: "Cancels the seat-order bias and roughly halves the margin's stdev on the same underlying deals, verified empirically, not just argued for.",
+    },
+    {
+      label: 'Tie handling',
+      chose: 'Report ties as their own bucket',
+      insteadOf: 'Folding them into the win-rate denominator',
+      why: 'An exact-zero paired margin means neither team came out ahead, a real outcome (~15% of deals here), not a rounding artifact to discard.',
+    },
+    {
+      label: 'Sample size',
+      chose: 'Pilot batch, then solve for N via a power calculation',
+      insteadOf: 'A guessed deal count',
+      why: 'A 300-deal pilot estimates variance, then a standard power formula solves for the N needed to detect a chosen minimum effect at a target confidence, checked against the achieved CI at the end.',
+    },
+  ]}
+/>
+
+For this random-vs-random run, the 300-deal pilot measured a paired stdev
+of ~66.6 points/deal, which the power formula turned into a target of 1,393
+paired deals (to detect a ±5 pt/deal effect at 80% power, 95% confidence).
+Running that many gave a paired margin of **-1.15 pts/deal, 95% CI
+[-4.47, +2.17]**, an interval straddling zero, with an achieved half-width
+(±3.32) inside the ±5 target. Two identical uniform-random bots showing no
+detectable edge is exactly the result the harness needed to produce before
+being trusted on anything else.
+
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[
+    { label: 'Dealer 0 only', mean: 13.58, ciLower: 7.07, ciUpper: 20.08 },
+    { label: 'Dealer 1 only', mean: -15.87, ciLower: -22.44, ciUpper: -9.31 },
+    {
+      label: 'Paired (seat-order cancelled)',
+      mean: -1.15,
+      ciLower: -4.47,
+      ciUpper: 2.17,
+      highlight: true,
+    },
+  ]}
+/>
+
+The two single-dealer arms each look "significant" on their own (95% CIs
+excluding zero), but in opposite directions and of similar size, exactly
+the seat-order artifact the pairing exists to cancel, not a real skill gap
+between identical bots. Only the paired arm (highlighted) straddles zero,
+which is the correct answer.
+
+<WinTieLossBar
+  team0Label="Team 0 (Random)"
+  team1Label="Team 1 (Random)"
+  rows={[
+    { label: 'Dealer 0 only', team0: 0.477, tie: 0.0, team1: 0.523 },
+    { label: 'Dealer 1 only', team0: 0.518, tie: 0.0, team1: 0.482 },
+    {
+      label: 'Paired (seat-order cancelled)',
+      team0: 0.404,
+      tie: 0.153,
+      team1: 0.443,
+      highlight: true,
+    },
+  ]}
+/>
+
+Ties only exist in the paired arm: a single-dealer deal always has some
+nonzero margin, so it always resolves win or loss, 0% ties in both
+single-dealer rows above. Pairing two deals introduces a third possible
+outcome: the two mirrored margins can cancel each other out exactly,
+landing on 0. That happened on 15.3% of paired deals here, and it's
+reported as its own outcome rather than dropped from the win-rate
+denominator, since it genuinely means neither team came out ahead across
+both mirrored plays.
+
+---
+
+<Callout variant="lesson" title="A measurement tool has to prove it reports zero first">
+  Two identical uniform-random bots should show a paired margin
+  statistically indistinguishable from zero. That's not a throwaway smoke
+  test, it's the calibration check the whole evaluation harness has to pass
+  before any later "this agent is stronger" claim is allowed to rest on it.
+</Callout>
 
 ### Card-play strategy |#card-play-strategy|
 

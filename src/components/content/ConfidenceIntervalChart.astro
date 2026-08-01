@@ -1,0 +1,185 @@
+---
+interface Metric {
+  label: string;
+  mean: number;
+  ciLower: number;
+  ciUpper: number;
+  highlight?: boolean;
+}
+
+interface Props {
+  metrics: Metric[];
+  unit?: string;
+}
+
+const { metrics, unit = '' } = Astro.props;
+
+const values = metrics.flatMap((m) => [m.ciLower, m.ciUpper, 0]);
+const rawMin = Math.min(...values);
+const rawMax = Math.max(...values);
+const pad = (rawMax - rawMin) * 0.12 || 1;
+const domainMin = rawMin - pad;
+const domainMax = rawMax + pad;
+const pct = (v: number) => ((v - domainMin) / (domainMax - domainMin)) * 100;
+const fmt = (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
+const rowCount = metrics.length;
+---
+
+<div class="not-prose ci-chart" style={`grid-template-rows: repeat(${rowCount}, auto);`}>
+  <div
+    class="ci-zero-line"
+    style={`grid-row: 1 / span ${rowCount}; --zero-left: ${pct(0)}%;`}
+    aria-hidden="true"
+  >
+  </div>
+  {
+    metrics.map((m, i) => (
+      <>
+        <div class="ci-label" style={`grid-row: ${i + 1};`}>
+          {m.label}
+        </div>
+        <div class="ci-track" style={`grid-row: ${i + 1};`}>
+          <div
+            class:list={['ci-bar', { 'ci-bar-highlight': m.highlight }]}
+            style={`left: ${pct(m.ciLower)}%; width: ${pct(m.ciUpper) - pct(m.ciLower)}%;`}
+          />
+          <div
+            class:list={['ci-dot', { 'ci-dot-highlight': m.highlight }]}
+            style={`left: ${pct(m.mean)}%;`}
+          />
+        </div>
+        <div class="ci-value" style={`grid-row: ${i + 1};`}>
+          <span class="ci-mean">
+            {fmt(m.mean)} {unit}
+          </span>
+          <span class="ci-range">
+            [{fmt(m.ciLower)}, {fmt(m.ciUpper)}]
+          </span>
+        </div>
+      </>
+    ))
+  }
+</div>
+
+<style>
+  .ci-chart {
+    display: grid;
+    grid-template-columns: minmax(9rem, auto) 1fr minmax(10rem, auto);
+    column-gap: 1rem;
+    row-gap: 0.5rem;
+    align-items: center;
+    margin-block: 3rem 2rem;
+  }
+
+  .ci-label {
+    grid-column: 1;
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    color: var(--color-fg);
+    white-space: nowrap;
+  }
+
+  .ci-track {
+    grid-column: 2;
+    position: relative;
+    height: 1.5rem;
+  }
+
+  .ci-bar {
+    position: absolute;
+    top: 50%;
+    height: 0.3rem;
+    min-width: 0.3rem;
+    border-radius: 999px;
+    background-color: var(--color-fg-muted);
+    opacity: 0.4;
+    transform: translateY(-50%);
+  }
+
+  .ci-bar-highlight {
+    background-color: var(--color-accent);
+    opacity: 0.55;
+  }
+
+  .ci-dot {
+    position: absolute;
+    top: 50%;
+    width: 0.6rem;
+    height: 0.6rem;
+    border-radius: 50%;
+    background-color: var(--color-fg-muted);
+    transform: translate(-50%, -50%);
+  }
+
+  .ci-dot-highlight {
+    background-color: var(--color-accent);
+  }
+
+  .ci-value {
+    grid-column: 3;
+    font-size: 0.8125rem;
+    line-height: 1.3;
+    white-space: nowrap;
+  }
+
+  .ci-mean {
+    font-family: var(--font-mono);
+    color: var(--color-fg);
+  }
+
+  .ci-range {
+    display: block;
+    color: var(--color-fg-muted);
+    font-size: 0.75rem;
+  }
+
+  .ci-zero-line {
+    grid-column: 2;
+    align-self: stretch;
+    position: relative;
+  }
+
+  .ci-zero-line::before {
+    content: '';
+    position: absolute;
+    top: -0.5rem;
+    bottom: -0.5rem;
+    left: var(--zero-left);
+    border-left: 2px dashed var(--color-fg);
+    opacity: 0.65;
+  }
+
+  .ci-zero-line::after {
+    content: '0';
+    position: absolute;
+    top: -2.1rem;
+    left: var(--zero-left);
+    transform: translateX(-50%);
+    font-family: var(--font-mono);
+    font-weight: 600;
+    font-size: 0.6875rem;
+    color: var(--color-fg);
+  }
+
+  @media (max-width: 32rem) {
+    .ci-chart {
+      grid-template-columns: 1fr;
+      row-gap: 0.25rem;
+    }
+
+    .ci-label,
+    .ci-track,
+    .ci-value,
+    .ci-zero-line {
+      grid-column: 1;
+    }
+
+    .ci-zero-line {
+      display: none;
+    }
+
+    .ci-label {
+      margin-top: 0.75rem;
+    }
+  }
+</style>
