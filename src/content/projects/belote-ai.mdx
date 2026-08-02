@@ -39,10 +39,13 @@ phases:
       sample-size calculation instead of a guessed deal count. Result: -1.15
       pts/deal, 95% CI [-4.47, +2.17] over 1,393 paired deals, statistically
       indistinguishable from zero, as it should be for two identical bots.'
-  - id: 'card-play-strategy'
+  - id: 'rulevalidbot'
     status: 'done'
-    summary: 'A partner-aware, win-cheaply-or-discard-low strategy beating the
-      best baseline so far by +50.58 pts/deal (78.8% win rate).'
+    summary: 'Fixed bidding/play heuristics as the first real agent, beating
+      the random baseline by +15.93 pts/deal, 95% CI [+12.19, +19.67], on
+      1,250 deals sized by the walking skeleton pilot-then-size procedure.
+      A take-threshold sweep then showed a stricter bidder does even better
+      against random, up to a point.'
   - id: 'ismcts'
     status: 'done'
     summary: "OpenSpiel's information-set MCTS, with a from-scratch
@@ -67,6 +70,13 @@ import DecisionTable from '../../components/content/DecisionTable.astro';
 import ConfidenceIntervalChart from '../../components/content/ConfidenceIntervalChart.astro';
 import BranchDiagram from '../../components/content/BranchDiagram.astro';
 import WinTieLossBar from '../../components/content/WinTieLossBar.astro';
+import PercentBars from '../../components/content/PercentBars.astro';
+import SweepChart from '../../components/content/SweepChart.astro';
+import {
+  sweepMarginSeries,
+  sweepWinRateSeries,
+  sweepBreakdownSeries,
+} from '../../data/belote-rulevalidbot-sweep.ts';
 
 ## Overview
 
@@ -356,12 +366,179 @@ had a net edge across both plays.
   before any later "this agent is stronger" claim is allowed to rest on it.
 </Callout>
 
-### Card-play strategy |#card-play-strategy|
+### RuleValidBot |#rulevalidbot|
 
-<PhaseJournal projectSlug="belote-ai" phaseId="card-play-strategy" />
+<PhaseJournal projectSlug="belote-ai" phaseId="rulevalidbot" />
 
-A partner-aware, win-cheaply-or-discard-low strategy beating the
-highest-value baseline by +50.58 pts/deal (78.8% win rate).
+The first real agent, deliberately minimal: the goal was reliably beating
+the random baseline with a tight confidence interval, not playing well.
+
+<ObjectDiagram
+  nodes={[
+    {
+      name: 'RuleValidBot',
+      fields: [
+        {
+          name: 'bid1 / bid2',
+          detail: "take, or name the strongest suit, if the hand's trump-adjusted points are >= 31; otherwise pass",
+        },
+        { name: 'play', detail: 'play the highest point-value legal card' },
+      ],
+    },
+  ]}
+/>
+
+Against uniform random, N sized by the same pilot-then-size procedure the
+walking skeleton built (a 300-deal pilot measured stdev, which solved for
+N=1,250 paired deals to detect a ±5 pt/deal effect at 80% power):
+
+<WinTieLossBar
+  team0Label="RuleValidBot"
+  team1Label="Random"
+  rows={[{ label: 'RuleValidBot vs Random', team0: 0.571, tie: 0.067, team1: 0.362, highlight: true }]}
+/>
+
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[{ label: 'RuleValidBot vs Random', mean: 15.93, ciLower: 12.19, ciUpper: 19.67, highlight: true }]}
+/>
+
+Raw win rate and mean margin can disagree without contradicting each other.
+Belote's all-or-nothing contract makes a loss a fixed, capped swing (fail
+the contract and the other team sweeps 162), while a win's size is
+uncapped, so a policy whose wins are bigger than its losses can win on
+average while still losing more individual deals than it wins.
+
+<Callout variant="info">
+  Not charted above since only the paired result is shown, but the
+  dealer=0-only arm behind this same result is exactly that case:
+  RuleValidBot loses that raw count 45.1% to 54.9%, yet still averages
+  +21.48 pts/deal on it.
+</Callout>
+
+Splitting *how often* a team gets to declare from *how well it does when it
+does* told a more precise story than the headline number alone:
+
+<PercentBars
+  title="Declare frequency"
+  bars={[
+    { label: 'RuleValidBot declares', value: 0.303 },
+    { label: 'Random declares', value: 0.697, highlight: true },
+  ]}
+/>
+<PercentBars
+  title="Declare success rate"
+  bars={[
+    { label: 'RuleValidBot succeeds', value: 0.708, highlight: true },
+    { label: 'Random succeeds', value: 0.630 },
+  ]}
+/>
+
+Random gets to attempt a contract more than twice as often (its bidding is
+a blind coin flip that regularly preempts RuleValidBot before it even gets
+a turn), yet still succeeds less often when it does. Raw win rate would
+have conflated those two effects; reporting them separately keeps the real
+skill signal (70.8% vs 63.0% success) from hiding behind the opportunity
+imbalance (30.3% vs 69.7% frequency), and vice versa.
+
+That's not the same as showing "be more selective" is the right strategy,
+though. RuleValidBot has no way to know in advance whether a given hand
+will actually succeed, it only estimates via the trump-adjusted points
+heuristic, and being pickier mechanically raises the success rate just by
+filtering for stronger hands, at the cost of giving up most opportunities
+entirely. Whether a given threshold trades away too much frequency for
+that higher per-attempt rate is exactly what the sweep below tests.
+
+The `>= 31` take-threshold and "always play highest-value card" were both
+unexamined choices, so the natural next question was whether 31 was even a
+good number. A sweep from 30 to 80, evaluated against the same fixed random
+reference at each point (5,000 paired deals per threshold), answered that
+directly:
+
+<SweepChart
+  series={sweepMarginSeries}
+  xDomain={[29, 81]}
+  yDomain={[0, 35]}
+  xTicks={[30, 40, 50, 60, 70, 80]}
+  yTicks={[0, 5, 10, 15, 20, 25, 30, 35]}
+  xLabel="hand_points_threshold"
+  yLabel="Margin vs random (pts/deal)"
+  referenceLine={0}
+/>
+
+<SweepChart
+  series={sweepWinRateSeries}
+  xDomain={[29, 81]}
+  yDomain={[0.5, 0.72]}
+  xTicks={[30, 40, 50, 60, 70, 80]}
+  yTicks={[0.5, 0.55, 0.6, 0.65, 0.7]}
+  yTickFormat={(v) => `${Math.round(v * 100)}%`}
+  xLabel="hand_points_threshold"
+  yLabel="Paired win rate vs random"
+  referenceLine={0.5}
+/>
+
+Margin and win rate climb steeply from threshold 30 up to about 43, then
+plateau from there on. Threshold 58 is the nominal best on both
+metrics (+31.36 pts/deal, 69.9% win rate), but it isn't meaningfully
+distinguishable from most of the 40s and 50s, every point's CI in the
+plateau overlaps its neighbors. The real finding is "stop being reckless
+past ~43," not "58 is the answer."
+
+Splitting *how often* RuleValidBot declares from *how well it does when it
+declares vs. defends* explains *why* the plateau happens, not just that it
+does:
+
+<SweepChart
+  series={sweepBreakdownSeries}
+  xDomain={[29, 81]}
+  yDomain={[0, 1]}
+  xTicks={[30, 40, 50, 60, 70, 80]}
+  yTicks={[0, 0.2, 0.4, 0.6, 0.8, 1]}
+  yTickFormat={(v) => `${Math.round(v * 100)}%`}
+  xLabel="hand_points_threshold"
+  yLabel="Rate"
+  height={280}
+/>
+
+RuleValidBot's hand-points threshold has a real ceiling: a 5-card hand
+can't score above roughly 66, so past that it never declares at all, and
+its declare rate is already under 5% by the mid-40s. Its win rate *when it
+does declare* keeps climbing as the threshold rises, past 90% at the high
+end, though noisy there (the widening band) since only a handful of hands
+ever qualify. Its win rate *when defending*, on the other hand, barely
+moves: flat around 42% regardless of threshold, since that side depends
+only on how often Random's own blind bid fails, not on anything
+RuleValidBot decides.
+
+<Callout variant="lesson" title="A paired win rate isn't the same statistic as the per-deal rate behind it">
+  Past threshold ~67, RuleValidBot never declares, so every deal is decided
+  purely by whether Random's contract succeeds, and win rate when defending
+  sits at 42.2%. Naively, the overall paired win rate should land near
+  there too. It doesn't, it's 69.6%, confirmed directly by rerunning 3,000
+  deals at a threshold well past that ceiling and inspecting the raw
+  margins. Cause: Belote's
+  all-or-nothing contract makes wins and losses wildly asymmetric in size
+  (a rare failed-random-contract win averages +166.6, a common
+  successful-random-contract loss averages only -69.3), and averaging two
+  draws from a distribution shaped like that pushes the paired split well
+  past what the raw per-deal split alone would suggest. A paired win rate
+  and a per-deal win rate are genuinely different statistics, not two views
+  of the same number.
+</Callout>
+
+<Callout variant="lesson" title="A parameter tuned against one opponent doesn't automatically transfer">
+  The sweep holds everything fixed and evaluates each threshold against a
+  *fixed* reference (random), the same principle chess engines use for SPSA
+  tuning against a fixed reference engine, deliberately not another
+  RuleValidBot threshold, so the scale doesn't shift as candidates change.
+  That's the right way to find "better against random," but a threshold
+  climbing purely by capitalizing on random's careless contract failures
+  isn't necessarily better against a less careless opponent later.
+  Confirmed later, not just a hedge: the next phase's partner-aware
+  card-play strategy found exactly that, a threshold tuned against random
+  didn't automatically carry over once the opponent got smarter.
+</Callout>
 
 ### ISMCTS |#ismcts|
 

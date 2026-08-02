@@ -1,0 +1,259 @@
+---
+interface Point {
+  x: number;
+  y: number | null;
+  yLower?: number | null;
+  yUpper?: number | null;
+}
+
+interface Series {
+  label: string;
+  color: 'accent' | 'muted' | 'amber';
+  points: Point[];
+  band?: boolean;
+}
+
+interface Props {
+  series: Series[];
+  xDomain: [number, number];
+  yDomain: [number, number];
+  xTicks: number[];
+  yTicks: number[];
+  yTickFormat?: (v: number) => string;
+  xLabel?: string;
+  yLabel?: string;
+  referenceLine?: number;
+  height?: number;
+}
+
+const {
+  series,
+  xDomain,
+  yDomain,
+  xTicks,
+  yTicks,
+  yTickFormat = (v: number) => String(v),
+  xLabel,
+  yLabel,
+  referenceLine,
+  height: heightProp,
+} = Astro.props as Props;
+
+const width = 640;
+const height = heightProp ?? 260;
+const marginLeft = 46;
+const marginRight = 10;
+const marginTop = 10;
+const marginBottom = xLabel ? 40 : 26;
+const plotW = width - marginLeft - marginRight;
+const plotH = height - marginTop - marginBottom;
+
+const sx = (x: number) => marginLeft + ((x - xDomain[0]) / (xDomain[1] - xDomain[0])) * plotW;
+const sy = (y: number) => marginTop + (1 - (y - yDomain[0]) / (yDomain[1] - yDomain[0])) * plotH;
+
+const colorVar = {
+  accent: 'var(--color-accent)',
+  muted: 'var(--color-fg-muted)',
+  amber: 'var(--color-status-paused)',
+} as const;
+
+function splitRuns(points: Point[]): Point[][] {
+  const runs: Point[][] = [];
+  let current: Point[] = [];
+  for (const p of points) {
+    if (p.y === null || p.y === undefined) {
+      if (current.length) runs.push(current);
+      current = [];
+    } else {
+      current.push(p);
+    }
+  }
+  if (current.length) runs.push(current);
+  return runs;
+}
+
+function linePath(run: Point[]): string {
+  return run.map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(p.x).toFixed(2)},${sy(p.y as number).toFixed(2)}`).join(' ');
+}
+
+function bandPath(run: Point[]): string | null {
+  if (!run.every((p) => p.yLower != null && p.yUpper != null)) return null;
+  const top = run.map((p, i) => `${i === 0 ? 'M' : 'L'} ${sx(p.x).toFixed(2)},${sy(p.yUpper as number).toFixed(2)}`).join(' ');
+  const bottom = [...run]
+    .reverse()
+    .map((p) => `L ${sx(p.x).toFixed(2)},${sy(p.yLower as number).toFixed(2)}`)
+    .join(' ');
+  return `${top} ${bottom} Z`;
+}
+
+const renderedSeries = series.map((s) => {
+  const runs = splitRuns(s.points);
+  return {
+    label: s.label,
+    color: colorVar[s.color],
+    lines: runs.map(linePath),
+    bands: s.band === false ? [] : runs.map(bandPath).filter((b): b is string => b !== null),
+  };
+});
+
+const showLegend = series.length > 1;
+---
+
+<div class="not-prose sweep-chart">
+  {
+    showLegend && (
+      <div class="sweep-legend">
+        {series.map((s) => (
+          <span class="sweep-legend-item">
+            <span class="sweep-swatch" style={`background-color: ${colorVar[s.color]}`} />
+            {s.label}
+          </span>
+        ))}
+      </div>
+    )
+  }
+  <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={xLabel && yLabel ? `${yLabel} vs ${xLabel}` : undefined}>
+    {/* axes */}
+    <line
+      x1={marginLeft}
+      y1={marginTop + plotH}
+      x2={marginLeft + plotW}
+      y2={marginTop + plotH}
+      stroke="var(--color-border)"
+    />
+    <line x1={marginLeft} y1={marginTop} x2={marginLeft} y2={marginTop + plotH} stroke="var(--color-border)" />
+
+    {/* y ticks */}
+    {
+      yTicks.map((t) => (
+        <g>
+          <line
+            x1={marginLeft - 4}
+            y1={sy(t)}
+            x2={marginLeft + plotW}
+            y2={sy(t)}
+            stroke="var(--color-border)"
+            stroke-width="0.5"
+            opacity="0.5"
+          />
+          <text x={marginLeft - 8} y={sy(t)} class="sweep-tick sweep-tick-y">
+            {yTickFormat(t)}
+          </text>
+        </g>
+      ))
+    }
+
+    {/* x ticks */}
+    {
+      xTicks.map((t) => (
+        <g>
+          <line x1={sx(t)} y1={marginTop + plotH} x2={sx(t)} y2={marginTop + plotH + 4} stroke="var(--color-border)" />
+          <text x={sx(t)} y={marginTop + plotH + 16} class="sweep-tick sweep-tick-x">
+            {t}
+          </text>
+        </g>
+      ))
+    }
+
+    {/* reference line */}
+    {
+      referenceLine !== undefined && (
+        <line
+          x1={marginLeft}
+          y1={sy(referenceLine)}
+          x2={marginLeft + plotW}
+          y2={sy(referenceLine)}
+          stroke="var(--color-fg-muted)"
+          stroke-width="1"
+          stroke-dasharray="3 3"
+        />
+      )
+    }
+
+    {/* series */}
+    {
+      renderedSeries.map((s) => (
+        <>
+          {s.bands.map((d) => (
+            <path d={d} fill={s.color} opacity="0.15" stroke="none" />
+          ))}
+          {s.lines.map((d) => (
+            <path d={d} fill="none" stroke={s.color} stroke-width="2" />
+          ))}
+        </>
+      ))
+    }
+
+    {/* axis labels */}
+    {xLabel && (
+      <text x={marginLeft + plotW / 2} y={height - 6} class="sweep-axis-label">
+        {xLabel}
+      </text>
+    )}
+    {yLabel && (
+      <text
+        x={-(marginTop + plotH / 2)}
+        y={12}
+        class="sweep-axis-label"
+        transform="rotate(-90)"
+      >
+        {yLabel}
+      </text>
+    )}
+  </svg>
+</div>
+
+<style>
+  .sweep-chart {
+    margin-block: 1.5rem;
+  }
+
+  .sweep-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.8125rem;
+    color: var(--color-fg-muted);
+  }
+
+  .sweep-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .sweep-swatch {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 0.2rem;
+  }
+
+  svg {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+  }
+
+  .sweep-tick {
+    fill: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    font-size: 9px;
+  }
+
+  .sweep-tick-y {
+    text-anchor: end;
+    dominant-baseline: middle;
+  }
+
+  .sweep-tick-x {
+    text-anchor: middle;
+  }
+
+  .sweep-axis-label {
+    fill: var(--color-fg-muted);
+    font-size: 10px;
+    text-anchor: middle;
+  }
+</style>
