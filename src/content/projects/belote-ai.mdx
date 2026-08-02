@@ -22,7 +22,7 @@ technologyNotes:
     context: 'Backs the learned value network from the Guided rollout
       phase, which is still losing to RandomISMCTS.'
   - name: 'ISMCTS'
-    context: "OpenSpiel's information-set MCTS algorithm — the strongest
+    context: "OpenSpiel's information-set MCTS algorithm, the strongest
       agent family in the project so far."
   - name: 'OpenSkill'
     context: 'Powers round-robin pool ratings for multi-agent comparison,
@@ -57,7 +57,11 @@ phases:
     status: 'done'
     summary: "OpenSpiel's information-set MCTS, with a from-scratch
       resampler to keep sampled worlds consistent with what's actually been
-      seen so far."
+      seen so far. Against the actual tournament champion,
+      lead_conserve_trump, it's a decisive -17.35 pts/deal loss. A follow-up
+      sweep of the simulation budget (10 to 400) never closes that gap,
+      pointing at evaluator quality rather than search budget as the real
+      bottleneck."
   - id: 'guided-rollout-value-function'
     status: 'in-progress'
     summary: 'Testing whether a heuristic or learned rollout policy beats
@@ -168,7 +172,7 @@ To implement the game in `OpenSpiel`, two objects need to be defined:
         { name: 'rules', detail: 'official FFBelote rules, incl. Belote/Rebelote' },
         {
           name: 'scoring',
-          detail: 'capots, dedans, belote bonus; centered at 0 for RL',
+          detail: 'capots, dedans, belote bonus, centered at 0 for RL',
         },
         {
           name: 'resampler',
@@ -203,7 +207,7 @@ A few things still needed a deliberate call:
       label: 'RL scoring',
       chose: 'score = own_team_points − opponent_team_points',
       insteadOf: 'Raw official point totals (capots, dedans, belote bonus)',
-      why: 'Centered-at-0 score matches the convention used by other OpenSpiel games like Bridge; official points are still used for the game score itself.',
+      why: 'Centered-at-0 score matches the convention used by other OpenSpiel games like Bridge. Official points are still used for the game score itself.',
     },
   ]}
 />
@@ -309,10 +313,27 @@ For this random-vs-random run, the 300-deal pilot measured a paired stdev
 of ~66.6 points/deal, which the power formula turned into a target of 1,393
 paired deals (to detect a ±5 pt/deal effect at 80% power, 95% confidence).
 Running that many gave a paired margin of **-1.15 pts/deal, 95% CI
-[-4.47, +2.17]**, an interval straddling zero, with an achieved half-width
-(±3.32) inside the ±5 target. Two identical uniform-random bots showing no
-detectable edge is exactly the result the harness needed to produce before
-being trusted on anything else.
+[-4.47, +2.17]**, straddling zero, the result the harness needed to
+produce before being trusted on anything else. Holding that same mean and
+stdev fixed and only varying N shows why fewer deals wouldn't have said so
+with any confidence, and why going far beyond 1,393 buys little more:
+
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[
+    { label: 'N=50', mean: -1.15, ciLower: -18.66, ciUpper: 16.36 },
+    { label: 'N=300 (pilot alone)', mean: -1.15, ciLower: -8.30, ciUpper: 6.00 },
+    { label: 'N=1,393 (actual, sized)', mean: -1.15, ciLower: -4.47, ciUpper: 2.17, highlight: true },
+    { label: 'N=5,000', mean: -1.15, ciLower: -2.90, ciUpper: 0.60 },
+    { label: 'N=50,000', mean: -1.15, ciLower: -1.70, ciUpper: -0.60 },
+  ]}
+/>
+
+Half-width shrinks with `1/sqrt(N)`, not linearly: 6x the deals (50→300)
+only tightens it ~2.4x, and 36x more (1,393→50,000) tightens it just ~6x
+further, the diminishing return the power calculation above is built
+around. (Mean held fixed here purely to isolate N's effect. A real rerun
+at a different N would land on a different mean too.)
 
 <ConfidenceIntervalChart
   unit="pts/deal"
@@ -353,7 +374,7 @@ which is the correct answer.
 
 Both single-dealer rows show 0% ties because one deal can never land on an
 exact 0 margin. A made contract splits the points as actually won (say 90
-vs 72); a failed one sweeps everything to the defenders instead. Either way
+vs 72). A failed one sweeps everything to the defenders instead. Either way
 it's never perfectly even, since an 81-81 result is scored as a failed
 contract rather than a tie.
 
@@ -387,7 +408,7 @@ the random baseline with a tight confidence interval, not playing well.
       fields: [
         {
           name: 'bid1 / bid2',
-          detail: "take, or name the strongest suit, if the hand's trump-adjusted points are >= 31; otherwise pass",
+          detail: "take, or name the strongest suit, if the hand's trump-adjusted points are >= 31, otherwise pass",
         },
         { name: 'play', detail: 'play the highest point-value legal card' },
       ],
@@ -444,7 +465,7 @@ does* told a more precise story than the headline number alone:
 Random gets to attempt a contract more than twice as often (its bidding is
 a blind coin flip that regularly preempts RuleValidBot before it even gets
 a turn), yet still succeeds less often when it does. Raw win rate would
-have conflated those two effects; reporting them separately keeps the real
+have conflated those two effects. Reporting them separately keeps the real
 skill signal (70.8% vs 63.0% success) from hiding behind the opportunity
 imbalance (30.3% vs 69.7% frequency), and vice versa.
 
@@ -729,13 +750,17 @@ nothing" hypothesis directly rather than resting on the argument for it.
 <PhaseJournal projectSlug="belote-ai" phaseId="ismcts" />
 
 OpenSpiel's information-set MCTS, which required implementing
-`resample_from_infostate` on `BeloteState` from scratch — uniform sampling
+`resample_from_infostate` on `BeloteState` from scratch. Uniform sampling
 wasn't enough, it needed to respect suit-following/over-trump history to
-produce *consistent* worlds.
+produce *consistent* worlds. This general technique (resample a plausible
+fully-observed world consistent with what the searching player actually
+knows, run ordinary MCTS on it, repeat over many sampled worlds) is called
+PIMC (Perfect Information Monte Carlo) or determinization search, the same
+approach real bridge- and poker-playing programs use.
 
 <Callout variant="lesson" title="Plain MCTSBot silently cheats on imperfect-information games">
-  OpenSpiel's `MCTSBot` doesn't reject imperfect-information games outright —
-  it runs against Belote without error. But `BeloteState` stores all four
+  OpenSpiel's `MCTSBot` doesn't reject imperfect-information games outright.
+  It runs against Belote without error. But `BeloteState` stores all four
   hands as plain visible attributes, so MCTS's tree search has full access to
   opponents' hidden cards during rollout. An omniscient bot in an evaluation
   pool produces misleading win-rate and Elo numbers for *every other* agent it
@@ -744,14 +769,84 @@ produce *consistent* worlds.
   only MCTS-family bot allowed in the project as a result.
 </Callout>
 
-<Callout variant="lesson" title="A second hidden RNG was silently breaking reproducibility">
-  While hardening ISMCTS, a second, independent source of randomness was found
-  quietly making runs non-reproducible even with a fixed seed — on top of an
-  earlier randomness bug in `ISMCTSBot` itself that was fixed by implementing a
-  seeded resampler. Seeding one obvious entry point isn't enough to guarantee
-  reproducibility in a system with multiple stochastic components; every
-  source needs to be found and pinned independently.
+---
+
+With the resampler complete, ISMCTS was measured against step 02's actual
+tournament champion, `lead_conserve_trump@49`:
+
+<WinTieLossBar
+  team0Label="ISMCTS"
+  team1Label="lead_conserve_trump"
+  rows={[{ label: 'ISMCTS vs lead_conserve_trump', team0: 0.379, tie: 0.007, team1: 0.614, highlight: true }]}
+/>
+
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[{ label: 'ISMCTS vs lead_conserve_trump (N=1,550)', mean: -17.35, ciLower: -21.13, ciUpper: -13.56, highlight: true }]}
+/>
+
+A clear, decisive result. `lead_conserve_trump` is a genuinely stronger
+opponent than the `candidate` baseline ISMCTS was originally tested
+against, beating it by +14.60 pts/deal in its own right (step 02's
+tournament), so this reflects a tougher matchup, not a regression.
+
+---
+
+At only 25 simulations with a pure-random rollout evaluator, ISMCTS wasn't
+yet competitive with the best hand-crafted heuristic found so far, leaving
+one open question: does more search budget close the gap? A sweep of
+`max_simulations` over a 40x range, same fixed opponent
+(`lead_conserve_trump@49`), 200 paired deals per point, a fixed and modest
+count rather than the usual pilot-then-size procedure: sizing to a target
+effect at each point would make the already-most-expensive
+high-simulation points also demand the most deals:
+
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[
+    { label: '10 simulations', mean: -31.05, ciLower: -41.93, ciUpper: -20.16 },
+    { label: '25 simulations', mean: -18.45, ciLower: -27.86, ciUpper: -9.03 },
+    { label: '50 simulations', mean: -18.31, ciLower: -28.76, ciUpper: -7.85 },
+    { label: '100 simulations', mean: -5.00, ciLower: -15.10, ciUpper: 5.10, highlight: true },
+    { label: '200 simulations', mean: -11.89, ciLower: -22.81, ciUpper: -0.97 },
+    { label: '400 simulations', mean: -19.24, ciLower: -29.49, ciUpper: -8.99 },
+  ]}
+/>
+
+Cost scales as expected, think time per decision is roughly linear in
+`max_simulations`:
+
+| `max_simulations` | ms/decision |
+|---|---|
+| 10 | 2.8 |
+| 25 | 6.6 |
+| 50 | 13.9 |
+| 100 | 30.4 |
+| 200 | 67.9 |
+| 400 | 159.2 |
+
+A ~57x cost increase for a 40x simulation increase, close to proportional.
+
+<Callout variant="lesson" title="A wiggly curve isn't automatically a signal">
+  The margin improves steadily from 10 to 100 simulations, then gets *worse*
+  again from 100 to 400, back down near the 25/50-simulation level. Read as a
+  single line, that shape says "diminishing returns, then it gets worse," a
+  specific structural claim. But each point is only 200 paired deals, and
+  neighboring CIs substantially overlap (sims=100's upper bound and sims=400's
+  lower bound touch between -15.10 and -8.99). The one thing that does hold
+  up: sims=100 is the sole point whose CI includes zero, though with six
+  points swept, one landing on the "includes zero" side by chance is expected
+  even under a smooth true relationship, a reason to collect more data at
+  that point specifically, not to declare a sweet spot.
 </Callout>
+
+The headline holds regardless of the wiggle: across the entire tested
+range, a 40x compute increase from 10 to 400 simulations, ISMCTS never
+clearly closes the gap with `lead_conserve_trump`. Even the best point is
+only "not distinguishable from even," not "ahead." Spending more search
+budget on a random-rollout evaluator doesn't reliably buy strength here,
+evidence for why the next phase went after evaluator quality instead of
+simulation count as the lever to pull.
 
 ### Guided rollout & learned value function |#guided-rollout-value-function|
 
@@ -766,7 +861,7 @@ default random rollouts. Both are currently inconclusive (see
   default rollout at N=1,000 simulated deals (+1.13 pts/deal), but regressed to
   a statistically-indistinguishable -0.27 at N=10,000, with confidence
   intervals overlapping zero. Random, deterministic, and epsilon=0.3 rollouts
-  all turned out to be indistinguishable at the tested simulation budget — a
+  all turned out to be indistinguishable at the tested simulation budget, a
   concrete example of why the harness reports confidence intervals rather than
   point estimates, and why a result needs to survive a larger sample before
   it's trusted.
@@ -777,7 +872,7 @@ default random rollouts. Both are currently inconclusive (see
 ## Architecture
 
 The game engine (`BeloteGame`/`BeloteState`) lives in a personal OpenSpiel
-fork rather than in `belote-ai` itself — a deliberate decision to build on
+fork rather than in `belote-ai` itself, a deliberate decision to build on
 OpenSpiel's existing imperfect-information machinery and agent library
 (uniform random, MCTS, ISMCTS, the CFR family) instead of re-implementing all
 of that from scratch. `belote-ai` depends on the fork as an editable/path
@@ -799,7 +894,7 @@ belote/
 Agents implement OpenSpiel's `Bot` contract directly (`step`, `restart_at`,
 optional `inform_action`) rather than a bespoke interface, so legality is
 enforced by `state.legal_actions()` and information hiding is enforced by
-OpenSpiel itself — an agent only ever sees its own information state, never
+OpenSpiel itself. An agent only ever sees its own information state, never
 the full game state, so it's structurally impossible for a correctly-written
 bot to cheat.
 
@@ -834,7 +929,7 @@ Standing, project-wide choices that aren't tied to a single phase.
   If both bidding rounds end with everyone passing, official rules redeal
   indefinitely. The harness caps this at 10 attempts and treats an
   all-attempts-exhausted deal as a flat draw (all four `returns()` are 0)
-  rather than an error — a deliberate, documented deviation from the official
+  rather than an error, a deliberate, documented deviation from the official
   rules, made because every evaluation module needs a well-defined outcome for
   every deal, and an unbounded loop doesn't provide one.
 </Callout>
@@ -846,7 +941,7 @@ to the next, rather than assumed. That discipline paid for itself
 repeatedly: it caught a plain-MCTSBot "cheat" (full hand visibility during
 rollout), a hidden RNG silently breaking reproducibility, and a promising
 epsilon-greedy result that looked real at 1,000 simulated deals but
-collapsed to statistically indistinguishable at 10,000 — each one caught
+collapsed to statistically indistinguishable at 10,000, each one caught
 before it could be mistaken for real progress.
 
 ## Future improvements
@@ -861,3 +956,17 @@ is the next step, before deciding whether the value function is a viable
 replacement for ISMCTS's rollouts at all. Longer term, the goal is to
 upstream `python_belote` into `google-deepmind/open_spiel` so the project no
 longer depends on a personal fork for its core game implementation.
+
+Separately, worth revisiting once there's time for it: Belote's redeal
+("everyone passes twice") is currently handled as an in-tree chance
+branch, which is what triggered the `allow_inconsistent_action_sets`
+`KeyError` in the ISMCTS phase. OpenSpiel's own Euchre implementation
+avoids that entire class of bug by rule design, `stick_the_dealer=true`
+forces the dealer to name trump on the last bid so an all-pass redeal can
+never happen at all. Belote's official rules don't allow that shortcut,
+but terminating the state on any redeal and having the harness deal a
+fresh one externally would remove the collision the same way, and would
+arguably be more rule-faithful too, since a thrown-in deal doesn't score
+under the official rules either. Not urgent since the existing flag fully
+resolves the crash, but a cleaner model than looping in-tree if the game
+implementation gets revisited.
