@@ -82,3 +82,11 @@
 .prose :where(code):not(:where([class~="not-prose"] *))::after {
   content: none;
 }
+
+/* Kept out of Prose.astro's own scoped <style>: a component-scoped
+   :global(table) rule targeting slotted MDX content gets tree-shaken by
+   Astro's build since no <table> appears in Prose.astro's own template. */
+.prose table {
+  width: 100%;
+  overflow-x: auto;
+}

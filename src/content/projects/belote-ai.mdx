@@ -46,6 +46,13 @@ phases:
       1,250 deals sized by the walking skeleton pilot-then-size procedure.
       A take-threshold sweep then showed a stricter bidder does even better
       against random, up to a point.'
+  - id: 'card-play-strategy'
+    status: 'done'
+    summary: 'A partner-aware, win-cheaply-or-discard-low card-play strategy,
+      beating the highest-value baseline by +50.75 pts/deal, 95% CI [+47.37,
+      +54.13]. A 5-agent OpenSkill tournament confirmed a bidding threshold
+      tuned against random does not automatically transfer to a different
+      opponent.'
   - id: 'ismcts'
     status: 'done'
     summary: "OpenSpiel's information-set MCTS, with a from-scratch
@@ -124,7 +131,7 @@ an afterthought bolted on once agents existed.
 
 ## Phases
 
-Five phases so far, from a uniform-random baseline to a learned value network:
+Six phases so far, from a uniform-random baseline to a learned value network:
 
 <PhaseCarousel phases={frontmatter.phases}>
 
@@ -538,6 +545,183 @@ RuleValidBot decides.
   Confirmed later, not just a hedge: the next phase's partner-aware
   card-play strategy found exactly that, a threshold tuned against random
   didn't automatically carry over once the opponent got smarter.
+</Callout>
+
+### Card-play Strategy |#card-play-strategy|
+
+<PhaseJournal projectSlug="belote-ai" phaseId="card-play-strategy" />
+
+RuleValidBot's card play was as naive as its bidding was deliberately
+minimal: always play the highest point-value legal card, regardless of
+whether the trick can even be won or who's already winning it. This phase
+replaces that with a partner-aware strategy, `candidate`.
+
+<ObjectDiagram
+  nodes={[
+    {
+      name: 'candidate',
+      fields: [
+        { name: 'leading', detail: 'play the highest point-value card' },
+        {
+          name: 'partner winning',
+          detail: 'play the lowest point-value card',
+        },
+        {
+          name: 'can beat the winner',
+          detail: 'play the cheapest legal card that wins',
+        },
+        {
+          name: 'cannot beat it',
+          detail: 'play the lowest point-value card',
+        },
+      ],
+    },
+  ]}
+/>
+
+The "partner winning" branch is easy to get backwards: it plays the
+*lowest* card, not the highest. A trick's point total is the sum of all
+four cards played to it, regardless of who wins it, so adding a high card
+to a trick your partner already has locked up doesn't win you anything
+extra, it just burns a strong card you'll want in a later trick, and risks
+losing it outright if a later opponent still overtakes the trick before
+it's done. Play cheap when the trick's already won, go all-in only when
+you're the one who actually has to win it.
+
+Against step 01's `highest_value` baseline, same bidding threshold (31) on
+both sides, N sized by the same pilot-then-size procedure as every match
+so far:
+
+<WinTieLossBar
+  team0Label="candidate"
+  team1Label="highest_value"
+  rows={[
+    {
+      label: 'candidate vs highest_value',
+      team0: 0.779,
+      tie: 0.158,
+      team1: 0.063,
+      highlight: true,
+    },
+  ]}
+/>
+
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[
+    {
+      label: 'candidate vs highest_value',
+      mean: 50.75,
+      ciLower: 47.37,
+      ciUpper: 54.13,
+      highlight: true,
+    },
+  ]}
+/>
+
+Not a marginal improvement. Always playing highest value routinely beats
+your own partner's already-winning card for no reason, and just as
+routinely burns strong cards on tricks that are already lost, partner-aware
+and trump-aware logic fixes both for free.
+
+`candidate` beating `highest_value` confirms partner-awareness helps at
+all, but it doesn't mean partner-awareness this specific way is the best
+idea available. Four more strategies were added deliberately, each testing
+one specific idea rather than just assuming it:
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'lowest_value',
+      chose: 'Always discard the cheapest legal card',
+      insteadOf: "Assumed as a weak floor for comparison",
+      why: "Turned out not weak at all: conserving strong cards for tricks actually worth winning beats highest_value's zero-awareness burn.",
+    },
+    {
+      label: 'help_partner',
+      chose: 'Play highest when partner is already winning',
+      insteadOf: "candidate's play-lowest choice in that branch",
+      why: 'A plausible "help them win big" instinct, added specifically to measure it rather than just argue about it, since a trick\'s points go to the winning team regardless of which card either teammate contributed.',
+    },
+    {
+      label: 'lead_conserve_trump',
+      chose: 'Prefer a non-trump card when leading',
+      insteadOf: "candidate's highest-value-regardless lead",
+      why: 'Avoids burning trump early for no reason, before there is even a trick to fight for yet.',
+    },
+    {
+      label: 'second_hand_low',
+      chose: 'Always play low at trick position 2/3, decide only when last to act',
+      insteadOf: "candidate's partner-status check at every position",
+      why: 'Isolates position as the deciding factor instead of partner status, the classic trick-taking heuristic.',
+    },
+  ]}
+/>
+
+All 6 strategies share the exact same bidding logic, only card play
+differs, so before ranking them against each other properly, each first
+needed its own bidding threshold determined against the fixed random
+reference, the same sweep step 01 ran for `highest_value` alone, now
+generalized across all 6:
+
+| Strategy | Best threshold | Margin vs random | Win rate |
+|---|---|---|---|
+| `lead_conserve_trump` | 49 | +65.90 | 85.9% |
+| `candidate` | 49 | +54.17 | 80.4% |
+| `help_partner` | 58 | +51.95 | 79.5% |
+| `second_hand_low` | 49 | +50.24 | 78.7% |
+| `lowest_value` | 67 | +44.32 | 76.5% |
+| `highest_value` | 58 | +31.36 | 69.9% |
+
+The best threshold genuinely differs by strategy (49 to 67), even though
+bidding logic is identical across all six. That's not noise, it's a real
+interaction: a stronger card-play strategy can afford to declare on a
+wider range of hands, since it's more likely to turn a borderline hand
+into a made contract, while a weaker one needs a stricter filter to
+compensate. Bid and play aren't independently tunable stages.
+
+With every strategy at its own best threshold, a 7-agent round-robin
+(random plus all 6, 5,000 paired deals per pairing) ranks them the same
+way as the first tournament, one statistically-vetted verdict per pairing
+into OpenSkill, not raw per-deal outcomes. OpenSkill tracks each agent as
+a skill *distribution* (a mean `mu` and an uncertainty `sigma`), not a
+single number, and the **ordinal** below (`mu - 3*sigma`) is its
+conservative, deliberately pessimistic point estimate for ranking: an
+agent's true skill is claimed to sit above its ordinal with high
+confidence, so a wide gap between two agents' ordinals is a safer signal
+than comparing their `mu`s directly:
+
+<ConfidenceIntervalChart
+  unit="ordinal"
+  metrics={[
+    { label: 'lead_conserve_trump@49', mean: 16.45, ciLower: 9.53, ciUpper: 23.37, highlight: true },
+    { label: 'candidate@49', mean: 12.94, ciLower: 6.0, ciUpper: 19.89 },
+    { label: 'second_hand_low@49', mean: 8.07, ciLower: 1.17, ciUpper: 14.97 },
+    { label: 'help_partner@58', mean: 4.5, ciLower: -2.42, ciUpper: 11.42 },
+    { label: 'highest_value@58', mean: 0.3, ciLower: -6.7, ciUpper: 7.3 },
+    { label: 'lowest_value@67', mean: -2.69, ciLower: -9.72, ciUpper: 4.33 },
+    { label: 'random', mean: -7.56, ciLower: -14.66, ciUpper: -0.47 },
+  ]}
+/>
+
+`lead_conserve_trump` is the strongest strategy found so far, beating
+`candidate` head-to-head by +14.60 pts/deal, trump conservation on lead
+mattered more than the partner-aware follow logic that was this phase's
+original headline result. `candidate` also beats `help_partner`
+head-to-head by +30.75 pts/deal, confirming the "burning a good card for
+nothing" hypothesis directly rather than resting on the argument for it.
+
+<Callout variant="lesson" title="A whole strategy ranking can invert, not just a threshold">
+  Against random alone, `lowest_value` (+44.32 pts/deal) clearly beat
+  `highest_value` (+31.36). Head-to-head in this round-robin, it's the
+  opposite: `highest_value@58` beats `lowest_value@67` by +10.30 pts/deal,
+  95% CI [+9.39, +11.21], not noise. Same root cause as a threshold not
+  transferring across opponents, a fixed reference only validates against
+  that reference, but a stronger version of the claim: it's not just the
+  best *setting* for a strategy that can fail to generalize, it's which of
+  two whole strategies is even *better* that can flip depending on the
+  opponent. A round-robin against several distinct opponents is the only
+  way to know which of two things is actually better in general.
 </Callout>
 
 ### ISMCTS |#ismcts|
