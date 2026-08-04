@@ -64,9 +64,12 @@ phases:
       bottleneck."
   - id: 'guided-rollout-value-function'
     status: 'in-progress'
-    summary: 'Testing whether a heuristic or learned rollout policy beats
-      ISMCTS default rollouts. Both are currently statistically
-      indistinguishable from it.'
+    summary: 'A heuristic rollout evaluator swap for ISMCTS default random
+      rollouts, using the actual tournament champion, lead_conserve_trump,
+      to drive it. The most promising result in the project so far, +3.43
+      pts/deal, a hair from significance, though adding diversity back on
+      top of it made things worse. The learned value network attempt is
+      still being written up.'
 relatedNotesSlugs: []
 order: 10
 progress: 45
@@ -852,20 +855,79 @@ simulation count as the lever to pull.
 
 <PhaseJournal projectSlug="belote-ai" phaseId="guided-rollout-value-function" />
 
-Exploring whether a heuristic or learned rollout policy beats ISMCTS's
-default random rollouts. Both are currently inconclusive (see
-[Future improvements](#future-improvements) below).
+Step 03 left `ISMCTSBot` using a plain uniform-random rollout evaluator,
+about the noisiest possible leaf signal. The natural next move, a
+well-established idea in game AI history (early Go/chess MCTS engines saw
+real gains moving from "light" random playouts to "heavy"
+heuristic-informed ones), was rolling out with step 02's actual tournament
+champion, `lead_conserve_trump`, for every seat instead of uniform-random
+moves. Both sides below are still `ISMCTSBot`, same tree search, same
+simulation budget, so the comparison isolates the rollout policy's own
+contribution rather than measuring `lead_conserve_trump`'s standalone
+strength (which is the much larger +65.90/+14.60 pts/deal margins it puts
+up as a plain heuristic bot in step 02):
 
-<Callout variant="lesson" title="A promising small-sample result didn't survive more data">
-  An epsilon-greedy guided rollout looked like a real improvement over ISMCTS's
-  default rollout at N=1,000 simulated deals (+1.13 pts/deal), but regressed to
-  a statistically-indistinguishable -0.27 at N=10,000, with confidence
-  intervals overlapping zero. Random, deterministic, and epsilon=0.3 rollouts
-  all turned out to be indistinguishable at the tested simulation budget, a
-  concrete example of why the harness reports confidence intervals rather than
-  point estimates, and why a result needs to survive a larger sample before
-  it's trusted.
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[
+    { label: 'GuidedISMCTS (lead_conserve_trump rollout) vs RandomISMCTS', mean: 3.43, ciLower: -0.24, ciUpper: 7.10, highlight: true },
+  ]}
+/>
+
+The most promising result in the project so far: its CI lower bound
+(-0.24) is a hair's width from excluding zero, a clear positive shift over
+ISMCTS's own default rollout, though not yet a confirmed win.
+
+Guided rollouts trade one thing for another: `lead_conserve_trump` is
+deterministic, so many of the 25 simulations from similar starting points
+play out near-identically, less diversity across the ensemble than random
+rollouts get for free, even though any individual heuristic rollout is
+more realistic on its own. A documented, real tradeoff in MCTS research
+("light" vs "heavy" playouts), not a bug, here the accuracy gain from an
+actually-strong heuristic looks like it's offsetting that diversity loss
+rather than being cancelled out by it.
+
+To test the diversity-loss side of that tradeoff directly, `epsilon=0.3`
+added controlled randomness back into the rollout, a probability
+`epsilon` of a random action instead of `lead_conserve_trump`'s:
+
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[
+    { label: 'EpsilonGreedy (eps=0.3, lead_conserve_trump rollout) vs RandomISMCTS', mean: -2.00, ciLower: -5.34, ciUpper: 1.34 },
+  ]}
+/>
+
+Worse, not better, flipping the near-significant +3.43 to a clearly
+negative -2.00.
+
+<Callout variant="lesson" title="The right amount of injected diversity depends on how good the heuristic already is">
+  Restoring diversity via `epsilon` is a reasonable hedge for a mediocre
+  heuristic, one with less accuracy worth protecting. For a heuristic
+  already strong enough to move the result on its own, the same exchange
+  rate flips: `epsilon` now spends 30% of every rollout decision on a
+  random action that degrades a policy that had become worth trusting
+  fully. Rollout accuracy and rollout determinism are separate levers, not
+  one and the same, restoring diversity only pays off when there isn't
+  much accuracy on the table to lose in the first place.
 </Callout>
+
+Every comparison above measured `GuidedISMCTS-strong` against
+`RandomISMCTS`, which answers "is this rollout policy better than a random
+one," not the question this line of investigation was actually building
+toward: does search, even with the best rollout policy found, ever beat
+`lead_conserve_trump` outright, with no search at all?
+
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[{ label: 'GuidedISMCTS-strong vs lead_conserve_trump (N=1,691)', mean: -6.23, ciLower: -9.83, ciUpper: -2.64, highlight: true }]}
+/>
+
+No: even the best rollout policy tried doesn't close the gap, the plain
+heuristic still wins clearly, its CI excludes zero. Still a real step
+forward from step 03's plain `ISMCTSBot` (random rollout) against the same
+opponent (-17.35 pts/deal there vs -6.23 here). Search with a good rollout
+policy narrows the gap at only 25 simulations, it doesn't close it.
 
 </PhaseCarousel>
 
