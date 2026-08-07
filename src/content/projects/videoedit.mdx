@@ -90,25 +90,25 @@ tracks carry over automatically.
 It's a two-person tool by design: each person (her and me) runs an
 independent local install on their own Mac, own API key, own `projects/`
 folder, no server, no accounts, no shared state. Most of the actual
-engineering weight sits in `capcut_captions.py` and its neighbors — CapCut's
+engineering weight sits in `capcut_captions.py` and its neighbors. CapCut's
 draft format is undocumented, versioned across app releases, and cached in
-memory while the app is open, and getting captions and audio levels written
-into it correctly took real reverse-engineering against a live install
-rather than following a spec.
+memory while the app is open. Getting captions and audio levels written
+into it correctly took real reverse-engineering against a live install,
+not just following a spec.
 
 ## Problem
 
 - **Consistent bilingual captions, without redoing styling by
-  hand every video.** A short, imperative recipe-step caption style, plus a
-  verbatim-and-translated dialogue track for tasting moments, in whatever
-  language pair a given video needs — done by hand per video, this is
-  repetitive and inconsistent.
+  hand every video.** She needs a short, imperative recipe-step caption
+  style, plus a verbatim-and-translated dialogue track for tasting
+  moments, in whatever language pair a given video needs. Doing that by
+  hand per video is repetitive and easy to make inconsistent.
 - **CapCut's draft format has no public spec.** Writing captions and audio
   gain directly into a `draft_info.json` means reverse-engineering
   undocumented, versioned, partially-duplicated state (see CapCut
   direct-write) against a real install, not implementing a documented API.
-- **Voiceover volume varies clip to clip**, and fixing that by ear inside
-  CapCut is repetitive and easy to get subtly wrong — a single loud
+- **Voiceover volume varies clip to clip.** Fixing that by ear inside
+  CapCut is repetitive and easy to get subtly wrong. A single loud
   transient in an otherwise-quiet clip can make a naive fix clip audio that
   should have stayed clean (see Balance Audio Levels).
 
@@ -150,7 +150,7 @@ everything is editable in the UI before exporting SRTs.
       fields: [
         { name: 'kind', detail: 'cooking / dialogue / custom' },
         { name: 'scene_start / scene_end', detail: 'the scene range it spans' },
-        { name: 'captions', detail: 'dict[lang, text] — whole-section caption' },
+        { name: 'captions', detail: 'dict[lang, text], the whole-section caption' },
         { name: 'caption_lines / transcript_lines', detail: 'optional split into timed sub-lines' },
       ],
     },
@@ -200,19 +200,20 @@ code-switched transcript aligned to the whisper timings:
       label: 'Persistence',
       chose: 'A projects/ folder per video (mp4, keyframes/, project.json)',
       insteadOf: 'A database',
-      why: 'Two people, no server, no shared state — the app just lists projects by scanning the folder, and a project is trivially copyable/inspectable as plain files.',
+      why: 'Two people, no server, no shared state. The app just lists projects by scanning the folder, and a project is trivially copyable and inspectable as plain files.',
     },
   ]}
 />
 
 <Callout variant="lesson" title="A local single-user app still needs to survive concurrent writes to itself">
-  `project.json` is written by whichever request last finishes — autosave
-  from an edit, a caption regeneration, a CapCut write — and an in-place
-  overwrite can leave a half-written file if two land close together.
-  Every write goes through a tempfile-then-`os.replace` pattern instead
-  (write to a temp file in the same directory, atomically swap it in), so a
-  reader never observes a partial file even without any locking. The same
-  pattern was reused later for `profiles.json` and `settings.json`.
+  `project.json` gets written by whichever request finishes last: an
+  autosave from an edit, a caption regeneration, or a CapCut write. An
+  in-place overwrite can leave a half-written file if two of those land
+  close together. Every write goes through a tempfile-then-`os.replace`
+  pattern instead (write to a temp file in the same directory, then
+  atomically swap it in), so a reader never sees a partial file, even
+  without any locking. The same pattern got reused later for
+  `profiles.json` and `settings.json`.
 </Callout>
 
 ### CapCut direct-write |#capcut-direct-write|
@@ -222,18 +223,18 @@ The bigger payoff over plain SRT export: `write_captions()`
 per-line highlight) and secondary (bottom, white-with-shadow) text tracks
 straight into the CapCut draft linked to a project, so an SRT re-import and
 manual restyling per video isn't needed at all. None of this is
-documented anywhere — every rule below came from inspecting a real
+documented anywhere. Every rule below came from inspecting a real
 `CAPCUT_PC/9.1.0-beta4` draft on disk and testing against a live install.
 
-<Callout variant="warning" title="CapCut caches its draft in memory — an external edit while it's open is invisible or gets clobbered">
+<Callout variant="warning" title="CapCut caches its draft in memory: an external edit while it's open is invisible or gets clobbered">
   CapCut loads a draft into memory on open and has no mechanism to pick up
   external file changes. An edit made while it's open either doesn't show,
   or gets silently overwritten when CapCut's own in-memory state flushes
   back to disk on close. `is_draft_locked()` checks for a `.locked` file in
-  the draft folder and blocks writes while a project is open — a hard
-  technical limit this tool has to respect, not just a safety gate
-  (confirmed against other independent CapCut-editing tools, none of which
-  claim a hot-reload path either).
+  the draft folder and blocks writes while a project is open. That's a
+  hard technical limit this tool has to respect, not just a safety gate,
+  confirmed against other independent CapCut-editing tools, none of which
+  claim a hot-reload path either.
 </Callout>
 
 <Callout variant="warning" title="Newer CapCut versions store the draft in two places, and both need writing">
@@ -249,19 +250,19 @@ documented anywhere — every rule below came from inspecting a real
       label: 'Replace-on-rewrite',
       chose: 'Sweep every text material whose group_id starts with videoedit_',
       insteadOf: 'Deleting only the ids remembered from the last write',
-      why: 'Self-healing even if the remembered-ids state file desyncs from the draft (e.g. a backend --reload restart mid-write) — an earlier version trusting only remembered ids left orphaned duplicate caption tracks stacked in the draft.',
+      why: 'Self-healing even if the remembered-ids state file desyncs from the draft, for example after a backend --reload restart mid-write. An earlier version that trusted only remembered ids left orphaned duplicate caption tracks stacked in the draft.',
     },
     {
       label: 'Backups',
       chose: 'Back up both target files before every write',
       insteadOf: 'Trusting the write to be safe',
-      why: "A caption write mutates a real, hand-styled draft in place — a bad write with no backup would be destructive to work that can't be regenerated.",
+      why: "A caption write mutates a real, hand-styled draft in place. A bad write with no backup would be destructive to work that can't be regenerated.",
     },
     {
       label: 'History model',
       chose: 'One shared restore timeline for captions and loudness writes',
       insteadOf: 'A separate history per feature',
-      why: "draft_info.json is one file per location — restoring any entry always reverts the whole file, so separate per-feature histories would misrepresent what a restore actually does (see Balance Audio Levels).",
+      why: "draft_info.json is one file per location, so restoring any entry always reverts the whole file. Separate per-feature histories would misrepresent what a restore actually does (see Balance Audio Levels).",
     },
   ]}
 />
@@ -271,15 +272,15 @@ documented anywhere — every rule below came from inspecting a real
 Originally a single global settings singleton (one style source, one set of
 prompts, a fixed fr-primary/en-secondary pair). **Profiles** replace that
 with a named preset picked once per project at creation time, so the same
-install can cover more than one language pair, style, or prompt setup —
-useful for a second show, or just a different caption tone.
+install can cover more than one language pair, style, or prompt setup.
+Useful for a second show, or just a different caption tone.
 
 <ObjectDiagram
   nodes={[
     {
       name: 'Profile',
       fields: [
-        { name: 'primary_language (+ optional secondary)', detail: 'from en/fr/ja — scopes captions, transcripts, SRT export' },
+        { name: 'primary_language (+ optional secondary)', detail: 'from en/fr/ja, scopes captions, transcripts, and SRT export' },
         { name: 'capcut_style_source_id + cached styles/positions', detail: 'a CapCut draft picked once to copy caption styling and positioning from' },
         { name: 'caption/custom-text/translate prompt overrides', detail: 'plus *_send_keyframes / *_send_dish_context toggles' },
       ],
@@ -299,7 +300,7 @@ useful for a second show, or just a different caption tone.
       label: 'Migration',
       chose: 'Auto-fold the old singleton settings into a "Default" profile the first time profiles.json is needed',
       insteadOf: 'A manual one-time setup step',
-      why: "The existing install (mine, and my wife's) already had projects depending on the old fr/en behavior — _migrate_from_settings preserves it as Default automatically rather than requiring anyone to notice and re-configure anything.",
+      why: "The existing install, mine and my wife's, already had projects depending on the old fr/en behavior. _migrate_from_settings preserves it as a Default profile automatically, so nobody has to notice or re-configure anything.",
     },
   ]}
 />
@@ -318,7 +319,7 @@ Voiceover clips can come out louder or quieter than their neighbors
 depending on how close to the mic a given take was. `capcut_audio.py`'s
 `analyze()`/`apply()` fix that directly inside the linked CapCut draft: measure
 each eligible segment's integrated loudness, push it toward a target, write
-the gain into the segment's existing `volume` field — no re-encoding, no
+the gain into the segment's existing `volume` field. No re-encoding, no
 touching the original media.
 
 <BranchDiagram
@@ -328,8 +329,8 @@ touching the original media.
   }}
   branchLabel="wanted gain = target_lufs − measured_lufs, capped so true peak never exceeds −1 dBTP"
   branches={[
-    { name: 'Cap eats ≤3dB of wanted gain', detail: 'written directly into volume — most clips' },
-    { name: 'Cap eats >3dB of wanted gain', detail: 'a brief spike (e.g. a mic bump) is blocking most of the real gain — flagged and excluded from apply(), not silently under-normalized' },
+    { name: 'Cap eats ≤3dB of wanted gain', detail: 'written directly into volume, for most clips' },
+    { name: 'Cap eats >3dB of wanted gain', detail: 'a brief spike (e.g. a mic bump) is blocking most of the real gain, so it gets flagged and excluded from apply() instead of silently under-normalized' },
   ]}
   mergeLabel="only non-flagged, non-zero-volume segments get written"
   merge={{
@@ -340,8 +341,8 @@ touching the original media.
 
 <Callout variant="lesson" title="A brief peak can silently starve an otherwise-quiet clip of its needed gain">
   A single loud transient (a mic bump) can push a segment's true peak right
-  up to the safety ceiling even though the rest of the clip — the actual
-  speech — is quiet. The peak cap then blocks nearly all of the wanted
+  up to the safety ceiling even though the rest of the clip, the actual
+  speech, is quiet. The peak cap then blocks nearly all of the wanted
   gain, leaving that one clip inconsistent with its properly-boosted
   neighbors, found via dogfooding on a clip with exactly this problem.
   Flagging and excluding it from `apply()` entirely (rather than writing
@@ -352,8 +353,8 @@ touching the original media.
 </Callout>
 
 Flagged clips stay selectable, just default-unchecked (normal clips
-default-checked): checking one is an explicit override that writes its
-*uncapped* wanted gain instead of its near-useless capped one — otherwise
+default-checked). Checking one is an explicit override: it writes the
+*uncapped* wanted gain instead of the near-useless capped one. Otherwise
 "selecting" a flagged clip would do nothing audible. Each clip gets an
 inline before/after audio preview (one `<audio>` element with a tab toggle
 swapping its `src`, rather than two full-width players, which ate too much
@@ -362,9 +363,9 @@ space in a long clip list) so the fix can be heard before it's committed.
 ### CapCut position & wrap calibration |#capcut-position-calibration|
 
 CapCut lets a wrapped caption's extra lines overflow past its declared
-single-line box without moving the box's own anchor — so there's no
-anchor-position signal to derive a wrapped caption's true per-line growth
-from. Getting primary/secondary caption pairs to sit correctly regardless
+single-line box without moving the box's own anchor. That means there's
+no anchor-position signal to derive a wrapped caption's true per-line
+growth from. Getting primary/secondary caption pairs to sit correctly regardless
 of how many lines either one wraps to needed a different source of truth
 than the box's own reported position.
 
@@ -397,10 +398,10 @@ draft never actually demonstrated.
 
 <Callout variant="lesson" title="Simulating a third-party renderer's text layout only gets you so close">
   Wrap detection simulates CapCut's own Montserrat-Bold rendering against
-  the style's captured box width to decide whether a caption will wrap —
-  but even with the real captured `line_max_width` and correct font
-  metrics, it still missed a real wrap CapCut itself produced, with no
-  other field explaining the gap. `wrap_examples` (user-confirmed
+  the style's captured box width to decide whether a caption will wrap.
+  But even with the real captured `line_max_width` and correct font
+  metrics, it still missed a real wrap that CapCut itself produced, with
+  no other field to explain the gap. `wrap_examples` (user-confirmed
   wraps/non-wraps observed directly in a real draft) override the
   simulated threshold instead: any confirmed wrap narrows the threshold to
   that example's width, since missing a real wrap is worse than
@@ -419,7 +420,7 @@ draft never actually demonstrated.
       label: 'Character-level fallback',
       chose: 'Approximate character-by-character wrapping for a single space-less token wider than the box',
       insteadOf: 'Space-splitting only',
-      why: "A long URL — or this tool's own calibration fixtures — can't be broken by space-wrapping at all, which plain space-splitting can't detect.",
+      why: "A long URL, or this tool's own calibration fixtures, can't be broken by space-wrapping at all. Plain space-splitting can't catch that on its own.",
     },
   ]}
 />
@@ -450,7 +451,7 @@ to the editor card it came from.
       label: 'Rebuild strategy',
       chose: "Rebuild a scene's lines wholly from its CSV row group",
       insteadOf: 'Patching lines index-by-index',
-      why: 'Doubles as a splitter/merger for free — giving a scene more or fewer rows than it had lines just changes the resulting split, with no separate split/merge codepath to maintain.',
+      why: 'Doubles as a splitter/merger for free. Giving a scene more or fewer rows than it had lines just changes the resulting split, with no separate split/merge codepath to maintain.',
     },
     {
       label: 'Bad rows',
@@ -463,8 +464,8 @@ to the editor card it came from.
 
 <Callout variant="lesson" title="A CSV round-trip through a spreadsheet can silently change its own delimiter">
   Export always writes comma-separated, but Excel re-saves a CSV using
-  whatever the system locale's list separator is — a semicolon for French,
-  for instance. Assuming comma on import would silently misparse a re-saved
+  whatever the system locale's list separator is (a semicolon for French,
+  for instance). Assuming comma on import would silently misparse a re-saved
   file. `csv.Sniffer` detects the actual delimiter used (falling back to
   comma), so the round trip survives a spreadsheet in the middle
   regardless of locale.
@@ -493,7 +494,7 @@ left inconsistent with its neighbors.
 
 Straight from the project's own deferred-to-v2 list:
 
-- **CapCut draft JSON as input**, not just output — parsing
+- **CapCut draft JSON as input**, not just output. Parsing
   `draft_content.json` directly for an exact cut list with no scenedetect
   errors, complementing the direct-write already shipped on the output
   side.
@@ -501,7 +502,7 @@ Straight from the project's own deferred-to-v2 list:
   instead of one style per profile.
 - **Per-section regenerate with a corrective note**, instead of
   regenerating a whole video's captions at once.
-- **Multi-account support with authentication** — today's profiles are
+- **Multi-account support with authentication.** Today's profiles are
   unauthenticated presets within one local install, not logged-in
-  identities; deliberately out of scope while this stays a two-person tool
-  (see General decisions).
+  identities. Deliberately out of scope while this stays a two-person
+  tool.

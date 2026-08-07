@@ -97,9 +97,10 @@ a proper [OpenSpiel](https://github.com/google-deepmind/open_spiel) game
 (chance-based dealing, imperfect information enforced by the framework, a
 flat action space covering bidding and card play). 
 
-Every agent built on top of it, from uniform random up to a PyTorch value 
-network are compared against the others through a seeded, confidence-interval-backed 
-evaluation harness rather than a handful of "it felt stronger" test games. 
+Every agent built on top of it, from uniform random up to a PyTorch value
+network, gets compared against the others through a seeded,
+confidence-interval-backed evaluation harness, not a handful of "it felt
+stronger" test games.
 
 A longer-term goal is bringing LLMs into that same comparison, not just to see
 how they rank against other agents, but whether they can actually pull off Belote's 
@@ -108,8 +109,9 @@ tactical plays, like an *appel* (calling for a suit via a discard signal) or an
 
 ## Problem
 
-Belote didn't exist as an OpenSpiel game, but the harder problem was proving
-that any agent built for it was actually better than the last one :
+Belote didn't exist as an OpenSpiel game. But the harder problem was
+proving that any new agent built for it was actually better than the
+last one:
 
 - **No existing implementation.** Belote has no OpenSpiel game to build or
   benchmark agents against in the first place.
@@ -770,6 +772,19 @@ approach real bridge- and poker-playing programs use.
   only MCTS-family bot allowed in the project as a result.
 </Callout>
 
+<Callout variant="lesson" title="A seeded bot wasn't actually deterministic">
+  Building the resampler surfaced an upstream bug: `ISMCTSBot`'s default
+  Python resampler ignored the `random_state` it was seeded with,
+  constructing an unseeded `UniformProbabilitySampler` internally and
+  falling back to wall-clock time regardless of the seed passed in. The
+  C++ implementation was unaffected, only the Python constructor call was
+  wrong. Two identically-seeded ISMCTS runs looked reproducible right up
+  until they weren't. Filed upstream as
+  [open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584),
+  with a test added to confirm seeded bots now behave identically across
+  runs.
+</Callout>
+
 ---
 
 With the resampler complete, ISMCTS was measured against step 02's actual
@@ -940,9 +955,12 @@ What each piece of the stack is actually doing, and where to look for more:
 Every phase above was built and evaluated against the harness before moving
 to the next, rather than assumed. That discipline paid for itself
 repeatedly: it caught a plain-MCTSBot "cheat" (full hand visibility during
-rollout), a hidden RNG silently breaking reproducibility, and a promising
-epsilon-greedy result that looked real at 1,000 simulated deals but
-collapsed to statistically indistinguishable at 10,000, each one caught
+rollout), an unseeded resampler silently breaking ISMCTS reproducibility
+(filed upstream as
+[open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584)),
+and a promising epsilon-greedy result that looked real at 1,000 simulated
+deals but collapsed to statistically indistinguishable at 10,000, each one
+caught
 before it could be mistaken for real progress.
 
 ## Future improvements

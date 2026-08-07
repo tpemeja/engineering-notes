@@ -1,0 +1,44 @@
+---
+title: 'Belote AI: an upstream ISMCTS seeding bug'
+date: 2026-08-03
+period: '2026-W32'
+tags: ['Belote AI', 'OpenSpiel', 'ISMCTS', 'Open Source']
+summary: "While implementing resample_from_infostate for ISMCTS, found that OpenSpiel's Python ISMCTSBot resampler ignores its random_state seed and falls back to wall-clock time. Filed a fix upstream as open_spiel#1584."
+relatedProjectSlug: 'belote-ai'
+projectPhaseId: 'ismcts'
+draft: false
+---
+
+## What I worked on
+
+Getting `ISMCTSBot` running against Belote meant finishing
+`resample_from_infostate` on `BeloteState` and then actually trusting the
+results it produced. That meant re-running the same seeded match twice
+and expecting identical output.
+
+## Challenges encountered
+
+It wasn't identical. Two runs of the exact same seeded `ISMCTSBot` match
+produced different decisions. Tracing it back, `ismcts.py`'s default
+resampler constructs its own `UniformProbabilitySampler` internally
+without ever passing through the `random_state` the bot itself was seeded
+with, so it silently falls back to wall-clock time regardless of the seed
+argument. The C++ `ISMCTSBot` implementation seeds correctly; only the
+Python constructor call was wrong, which is exactly the kind of gap that's
+easy to miss if you only test one language binding.
+
+## What I learned
+
+A "seeded" bot needs to be verified end to end, not assumed correct
+because the top-level API accepts a `seed` argument. This is the same
+discipline as the plain-`MCTSBot` full-hand-visibility issue found earlier
+in this phase: OpenSpiel's agent library is broad and well-built, but
+nothing about using it correctly for an imperfect-information game like
+Belote is automatic, reproducibility included.
+
+## Next steps
+
+- Filed [open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584)
+  upstream with the fix and a regression test for seeded determinism.
+- Re-verify every ISMCTS result gathered before this fix was in place, in
+  case any of it was quietly relying on non-reproducible rollouts.
