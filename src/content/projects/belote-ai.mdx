@@ -13,20 +13,18 @@ technologies:
   ]
 technologyNotes:
   - name: 'Python'
-    context: 'The language OpenSpiel and the whole evaluation harness are
-      written in.'
+    context: 'Language for the game engine and evaluation harness.'
   - name: 'OpenSpiel'
-    context: 'The game-engine framework Belote is implemented as a game
-      inside of, instead of a bespoke engine (see General decisions).'
+    context: 'Game-engine framework Belote is implemented as a game inside
+      of, instead of a bespoke engine.'
   - name: 'PyTorch'
-    context: 'Backs the learned value network from the Guided rollout
-      phase, which is still losing to RandomISMCTS.'
+    context: 'Backs the learned value network used in the Guided rollout
+      phase.'
   - name: 'ISMCTS'
-    context: "OpenSpiel's information-set MCTS algorithm, the strongest
-      agent family in the project so far."
+    context: "OpenSpiel's information-set MCTS algorithm, used to build
+      search-based agents."
   - name: 'OpenSkill'
-    context: 'Powers round-robin pool ratings for multi-agent comparison,
-      chosen over TrueSkill (see General decisions).'
+    context: 'Powers round-robin skill ratings across agents.'
 githubUrl: 'https://github.com/tpemeja/belote-ai'
 phases:
   - id: 'game-implementation'
@@ -931,70 +929,11 @@ policy narrows the gap at only 25 simulations, it doesn't close it.
 
 </PhaseCarousel>
 
-## Architecture
-
-The game engine (`BeloteGame`/`BeloteState`) lives in a personal OpenSpiel
-fork rather than in `belote-ai` itself, a deliberate decision to build on
-OpenSpiel's existing imperfect-information machinery and agent library
-(uniform random, MCTS, ISMCTS, the CFR family) instead of re-implementing all
-of that from scratch. `belote-ai` depends on the fork as an editable/path
-install and owns only:
-
-```
-belote/
-├── agents/
-│   ├── registry.py         # name -> pyspiel.Bot factory
-│   └── rule_valid_bot.py
-├── eval/
-│   ├── match.py            # evaluate_bots wrapper: duplicate deals, CIs, Elo
-│   ├── decision.py         # decision-quality scoring
-│   └── throughput.py       # games/sec benchmark
-├── cli.py
-└── tests/
-```
-
-Agents implement OpenSpiel's `Bot` contract directly (`step`, `restart_at`,
-optional `inform_action`) rather than a bespoke interface, so legality is
-enforced by `state.legal_actions()` and information hiding is enforced by
-OpenSpiel itself. An agent only ever sees its own information state, never
-the full game state, so it's structurally impossible for a correctly-written
-bot to cheat.
-
 ## Tech stack
 
 What each piece of the stack is actually doing, and where to look for more:
 
 <TechStack notes={frontmatter.technologyNotes} />
-
-## General decisions
-
-Standing, project-wide choices that aren't tied to a single phase.
-
-<Callout variant="decision" title="Build on OpenSpiel instead of a bespoke game engine">
-  Belote is implemented as an OpenSpiel game rather than a standalone engine,
-  inheriting its imperfect-information state model, a large library of
-  ready-made agents (random, MCTS, ISMCTS, CFR), `evaluate_bots` for
-  agent-vs-agent play, and built-in correctness tooling (`random_sim_test`,
-  golden playthroughs). The trade-off: the game lives in a personal fork of
-  OpenSpiel (`python_belote` isn't upstream yet), so belote-ai's
-  reproducibility is currently tied to a pinned commit of that fork rather than
-  a released package, until the game is upstreamed.
-</Callout>
-
-<Callout variant="decision" title="OpenSkill over TrueSkill for multi-agent ratings">
-  OpenSkill was chosen for round-robin pool ratings over Microsoft's TrueSkill
-  because it's MIT-licensed and patent-free, and it models team games (Belote's
-  2v2 structure) natively rather than requiring a workaround.
-</Callout>
-
-<Callout variant="decision" title="Cap redeals instead of matching the official unlimited-redeal rule">
-  If both bidding rounds end with everyone passing, official rules redeal
-  indefinitely. The harness caps this at 10 attempts and treats an
-  all-attempts-exhausted deal as a flat draw (all four `returns()` are 0)
-  rather than an error, a deliberate, documented deviation from the official
-  rules, made because every evaluation module needs a well-defined outcome for
-  every deal, and an unbounded loop doesn't provide one.
-</Callout>
 
 ## Approach
 
