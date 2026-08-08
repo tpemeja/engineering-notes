@@ -1,0 +1,43 @@
+---
+title: 'Meta Graph API: Development mode can return empty data with no error'
+category: 'APIs'
+tags: ['Instagram', 'Meta', 'Graph API', 'OAuth']
+lastUpdated: 2026-08-07
+status: evergreen
+relatedNotes: []
+---
+import Callout from '../../components/content/Callout.astro';
+
+## Core concept
+
+A Meta app (Instagram/Facebook Graph API) starts in **Development mode**.
+In that mode, most endpoints work fine as long as the calling account is
+added as a tester and has accepted the invite. Comments are the exception:
+`GET /{media-id}/comments` returns a valid `200` with `data: []`, no error
+at all, until the app is switched to **Live mode** in the App Dashboard.
+Everything else, correct scope, accepted tester invite, valid token, can be
+right and comments will still come back empty.
+
+This isn't called out anywhere in the comments endpoint's own docs. It reads
+exactly like "no comments yet" or "wrong permission", not "wrong app mode",
+so it's easy to spend time re-checking scopes and tester status instead.
+
+## Where to check and fix it
+
+App Dashboard → **Settings → Basic** has the Development/Live toggle at the
+top. Switching to Live may prompt for basic info first (privacy policy URL,
+etc.) depending on the app's product setup. Once Live, the exact same
+request against the exact same token starts returning real comment data.
+
+<Callout variant="warning" title="Empty data with a 200 status is not proof the scope or tester setup is wrong">
+  If a Graph API list-type endpoint (comments in particular) returns an
+  empty array with no error, and the scope and tester invite both check
+  out, check the app's Development/Live mode before debugging auth further.
+  A silent empty response reads exactly like "nothing there yet."
+</Callout>
+
+## Rule of thumb
+
+An empty `data: []` from a Meta Graph API endpoint, with no error, is not
+confirmation that access is correctly scoped. For comments specifically,
+confirm the app is in Live mode before trusting an empty result.

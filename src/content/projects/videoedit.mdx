@@ -79,7 +79,7 @@ import BranchDiagram from '../../components/content/BranchDiagram.astro';
 ## Overview
 
 A local web app for subtitling my wife's TikTok/Instagram cooking videos.
-She edits in CapCut desktop and exports an mp4; this tool splits that
+She edits in CapCut desktop and exports an mp4. This tool splits that
 export into scenes, groups them into logical sections, proposes short
 recipe-step captions with Gemini, transcribes the tasting/dialogue moments,
 and hands the result back either as SRT files to import into CapCut, or
@@ -87,14 +87,11 @@ written directly into the linked CapCut draft so the styling and
 positioning she's already dialed in for the primary/secondary caption
 tracks carry over automatically.
 
-It's a two-person tool by design: each person (her and me) runs an
-independent local install on their own Mac, own API key, own `projects/`
-folder, no server, no accounts, no shared state. Most of the actual
-engineering weight sits in `capcut_captions.py` and its neighbors. CapCut's
-draft format is undocumented, versioned across app releases, and cached in
-memory while the app is open. Getting captions and audio levels written
-into it correctly took real reverse-engineering against a live install,
-not just following a spec.
+Most of the actual engineering weight sits in `capcut_captions.py` and its 
+neighbors. CapCut's draft format is undocumented, versioned across app 
+releases, and cached in memory while the app is open. Getting captions 
+and audio levels written into it correctly took real reverse-engineering 
+against a live install, not just following a spec.
 
 ## Problem
 
@@ -200,7 +197,7 @@ code-switched transcript aligned to the whisper timings:
       label: 'Persistence',
       chose: 'A projects/ folder per video (mp4, keyframes/, project.json)',
       insteadOf: 'A database',
-      why: 'Two people, no server, no shared state. The app just lists projects by scanning the folder, and a project is trivially copyable and inspectable as plain files.',
+      why: 'The app just lists projects by scanning the folder, and a project is trivially copyable and inspectable as plain files.',
     },
   ]}
 />

@@ -1,0 +1,233 @@
+---
+title: 'Insta Insight'
+description: 'Always-on Android tablet dashboard showing my wife''s Instagram Creator account stats, wake-triggered against the Graph API with a self-refreshing token and no backend.'
+status: active
+startDate: 2026-08-07
+technologies:
+  [
+    'Kotlin',
+    'Jetpack Compose',
+    'Retrofit',
+    'OkHttp',
+    'kotlinx.serialization',
+    'DataStore',
+    'EncryptedSharedPreferences',
+    'Instagram Graph API',
+  ]
+technologyNotes:
+  - name: 'Kotlin'
+    context: 'App language throughout.'
+  - name: 'Jetpack Compose'
+    context: 'Dashboard UI, auto-rotating post pager, kiosk-mode screen.'
+  - name: 'Retrofit'
+    context: 'Typed calls to graph.instagram.com.'
+  - name: 'OkHttp'
+    context: 'HTTP client + logging interceptor under Retrofit.'
+  - name: 'kotlinx.serialization'
+    context: 'JSON models for every Graph API response.'
+  - name: 'DataStore'
+    context: 'Local caches: dashboard, follower history, unseen comments.'
+  - name: 'EncryptedSharedPreferences'
+    context: 'Keystore-backed storage for the single long-lived access token, pinned to security-crypto 1.0.0.'
+  - name: 'Instagram Graph API'
+    context: 'Instagram Login surface (graph.instagram.com), chosen for secret-free token refresh.'
+phases:
+  - id: 'dashboard-core'
+    status: 'done'
+    summary: 'Wake-triggered refresh (no background polling, to save battery on a
+      not-always-plugged-in tablet): follower count, last 6 posts with
+      insights, all-time stats, cached locally so the next wake shows data
+      instantly even if a refresh fails.'
+  - id: 'post-insights'
+    status: 'done'
+    summary: 'Tap-through detail pager pulling richer per-post metrics (saves,
+      shares, watch time, profile visits/follows, reels skip rate), with
+      each newer/estimated metric fetched and error-contained separately
+      since one unsupported metric zeroes out a combined call.'
+  - id: 'follower-reach-history'
+    status: 'done'
+    summary: 'Daily follower snapshots accumulated locally, 30-day account-level
+      reach backfilled directly from Meta (a real time series, unlike
+      follower count), both rendered on a graphs screen.'
+  - id: 'kiosk-mode'
+    status: 'done'
+    summary: 'Screen Pinning + show-when-locked/turn-screen-on so a double-tap
+      wake goes straight to the dashboard, no swipe; adb shortcuts for
+      pinning and pushing a token, since screen pinning does not survive a
+      reboot.'
+  - id: 'comment-surfacing'
+    status: 'in-progress'
+    summary: "Local-only tracker for unseen top-level comments/replies across
+      recent posts. Getting the comments endpoint to return anything at all
+      needed the Meta app switched from Development to Live mode, an
+      undocumented requirement; the tracker itself is built but not yet
+      wired into the dashboard UI."
+relatedNotesSlugs: ['meta-graph-api-live-mode-comments']
+order: 20
+progress: 55
+---
+
+import Callout from '../../components/content/Callout.astro';
+import PhaseCarousel from '../../components/content/PhaseCarousel.astro';
+import TechStack from '../../components/content/TechStack.astro';
+import DecisionTable from '../../components/content/DecisionTable.astro';
+
+## Overview
+
+A single-purpose Android app for a tablet mounted where my wife can glance at
+her Instagram Creator account stats without opening the Instagram app and
+digging through its Insights UI. It wakes on a double-tap, fetches from the
+Instagram Graph API, and shows followers, reach, recent posts, and per-post
+metrics — kiosk-pinned so nothing else is reachable on the tablet.
+
+Deliberately no backend: the app talks directly to `graph.instagram.com` and
+refreshes its own long-lived token in place, so there's no server to run or
+pay for, at the cost of the token and its refresh logic having to live
+entirely on-device.
+
+## Problem
+
+- **A passive, always-current view, not another app to open.** The point is
+  a glance while walking past the tablet, not a session of opening Instagram
+  and tapping into Insights.
+- **No backend, but tokens expire.** A ~60-day long-lived token has to
+  refresh itself from the tablet with no server-side secret involved —
+  driving the choice of the Instagram Login surface specifically for its
+  secret-free `ig_refresh_token` grant.
+- **Meta's setup and docs don't match reality.** Getting from "create an app"
+  to "comments actually return data" needed several undocumented or
+  poorly-documented steps: a tester invite accepted by the account owner
+  (not the app admin), a scope added later without which the comments edge
+  returns an empty array with no error, and finally switching the app to
+  Live mode before comments return anything at all. See `SETUP.md` in the
+  repo for the full walkthrough.
+- **Android kiosk behavior isn't obvious either.** Screen Pinning, show-when-
+  locked, and turn-screen-on all had to be combined by trial and error to get
+  a double-tap wake to land directly on the dashboard.
+
+## Phases
+
+<PhaseCarousel phases={frontmatter.phases}>
+
+### Dashboard core |#dashboard-core|
+
+`InstagramRepository.refreshDashboard()` is the one entry point, called from
+`onResume()` on every wake and cold launch — there's no background service or
+scheduled job, by design, since the tablet isn't always plugged in. A refresh
+fetches the profile, the last 6 posts' insights in parallel (`async` per
+item), and account-level reach, then writes the result to `DashboardCache`.
+
+<Callout variant="decision" title="A failed refresh never clears a good cache">
+  `refreshDashboard()` returns `FetchResult.Failure` on any exception, but
+  never deletes what's already cached. The dashboard always shows the last
+  successful fetch rather than going blank on a transient network or token
+  error, which matters more on a device nobody is actively debugging.
+</Callout>
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Refresh trigger',
+      chose: 'Only on wake (onResume)',
+      insteadOf: 'A background polling job',
+      why: "The tablet isn't always plugged in; polling on a schedule would drain battery for updates nobody's looking at between wakes.",
+    },
+    {
+      label: 'Token storage',
+      chose: 'EncryptedSharedPreferences pinned to security-crypto 1.0.0',
+      insteadOf: 'The 1.1.x alpha MasterKey builder API',
+      why: 'Google deprecated the later alphas for reliability issues; 1.0.0 is stable and sufficient for a single stored value.',
+    },
+  ]}
+/>
+
+### Post insights |#post-insights|
+
+Tapping a post opens a richer breakdown than the dashboard tiles show: saves,
+shares, total interactions, and for video/reels, watch time — plus a set of
+newer or estimated metrics (`follows`, `profile_visits`, `reels_skip_rate`,
+`profile_activity`) that aren't reliably supported across accounts.
+
+<Callout variant="lesson" title="One unsupported metric in a combined call zeroes out the whole response">
+  Batching `reels_skip_rate` or `profile_activity` into the same
+  `/insights` call as the reliable metrics (reach, saved, shares) silently
+  zeroed out all of them, confirmed empirically. Each newer/estimated metric
+  now gets its own call and its own try/catch (`fetchSingleMetric`), so one
+  unsupported field can't take the rest down with it.
+</Callout>
+
+`reposts_count` was tried and ruled out entirely for this app: Meta rejects
+it outright on the Instagram Login auth surface this app uses (confirmed
+against two API versions and both the insights and media-node field shapes).
+It most likely needs the Facebook Login product instead, which would give up
+the secret-free token refresh this app is built around — not worth the
+trade for one stat.
+
+### Follower & reach history |#follower-reach-history|
+
+Follower count has no historical API on Meta's side, so the app accumulates
+its own daily snapshots locally (`FollowerHistoryCache`). Account-level
+reach is different — Meta does expose a real time series for it — so that's
+backfilled ~30 days in one call instead of waiting to accumulate it wake by
+wake.
+
+### Kiosk mode |#kiosk-mode|
+
+`setShowWhenLocked(true)` + `setTurnScreenOn(true)` in `onCreate`, combined
+with Android's Screen Pinning turned on manually per-boot, gets a double-tap
+wake to land directly on the dashboard with no lock-screen swipe. adb
+shortcuts cover both re-pinning after a reboot and pushing a fresh token via
+`onNewIntent` (needed since a pinned, already-running Activity doesn't go
+through `onCreate` again).
+
+### Comment surfacing |#comment-surfacing|
+
+`CommentTrackerStore` tracks which top-level comments and replies on recent
+posts haven't been seen in the dashboard yet, entirely locally — it never
+calls a write endpoint, and doesn't rely on Instagram's own read/like state
+since neither is a reliable "have I seen this" signal.
+
+<Callout variant="warning" title="The comments endpoint needs the app in Live mode, not just a valid scope and tester">
+  With a tester invite accepted and the `instagram_business_manage_comments`
+  scope granted, `GET /{media-id}/comments` still silently returned empty
+  `data: []` — no error — while the Meta app stayed in Development mode.
+  Nothing in the comments endpoint docs calls this out. Switching the app to
+  Live (App Dashboard → Settings → Basic) is what actually made real comment
+  data start coming back.
+</Callout>
+
+The tracker itself seeds silently on its first-ever run (everything that
+already exists is marked seen, so the feature starts at a real "0 unread"
+instead of surfacing a backlog), but it isn't wired into `MainActivity`'s
+dashboard yet — the data model and logic are done, the UI surface isn't.
+
+</PhaseCarousel>
+
+## Tech stack
+
+<TechStack notes={frontmatter.technologyNotes} />
+
+## Approach
+
+Every Graph API call that isn't guaranteed to be supported gets its own
+try/catch rather than being trusted to succeed or batched with reliable
+calls — one unsupported metric silently zeroing an entire combined response
+was the concrete failure that drove that pattern. The wake-only refresh
+model (no background service) and the never-clear-a-good-cache rule both
+follow from the same constraint: this runs unattended on a tablet nobody is
+actively watching, so a transient failure should degrade gracefully rather
+than surface as a blank screen or a drained battery.
+
+## Future improvements
+
+- **Wire `CommentTrackerStore` into the dashboard UI.** The tracking logic
+  and local storage are done; unseen comments don't surface anywhere yet.
+- **Proper pagination/backoff for all-time stats** if the account ever grows
+  past the current ~100-post cap fetched in one call — fine today at 13
+  posts, not built to scale further.
+
+## Related
+
+Setup and the full Meta app / API access walkthrough (tester invites, scope
+gotchas, the Live-mode requirement for comments, kiosk configuration) live in
+`SETUP.md` in the project repo.
