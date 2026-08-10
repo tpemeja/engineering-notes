@@ -1,6 +1,6 @@
 ---
 title: 'FastMock'
-description: 'Python middleware that mocks FastAPI endpoints straight from their own declared response models, with fault injection and FastAPI-shaped request validation. Published on PyPI.'
+description: 'Python middleware that mocks FastAPI endpoints from their own declared response models, with deterministic seeded responses, field-name-aware data, fault injection, and FastAPI-shaped request validation. Published on PyPI.'
 status: active
 startDate: 2024-06-02
 technologies:
@@ -10,6 +10,7 @@ technologies:
     'Starlette',
     'Pydantic',
     'polyfactory',
+    'Faker',
     'pytest',
     'uv',
     'MkDocs',
@@ -20,17 +21,19 @@ technologyNotes:
   - name: 'FastAPI'
     context: "The framework being mocked; the middleware and decorator hook into a route's own declarations rather than a separate schema."
   - name: 'Starlette'
-    context: 'FastMockMiddleware subclasses BaseHTTPMiddleware to intercept a request before routing resolves it.'
+    context: "FastMockMiddleware subclasses BaseHTTPMiddleware; route and path-parameter matching now delegate to Starlette's own APIRoute.matches."
   - name: 'Pydantic'
     context: 'MockData is itself a Pydantic model, and the response models being mocked are the caller''s own Pydantic models.'
   - name: 'polyfactory'
-    context: "Generates fake instances of a route's declared response model, Faker under the hood via BaseFactory."
+    context: "Generates fake instances of a route's declared response model; seeded per request and mixed with name-aware and stable-temporal factory variants."
+  - name: 'Faker'
+    context: "Backs polyfactory's own generation and the field-name-aware provider map (country, email, city, and similar) added in 0.2.0."
   - name: 'pytest'
-    context: 'Async test suite (pytest-asyncio) parametrized across decorator/middleware/header test clients.'
+    context: 'Async test suite (pytest-asyncio) at 100% line coverage, parametrized across decorator/middleware/header/seeding/provider-map test clients.'
   - name: 'uv'
-    context: 'Dependency management, dev workflow, and the one-click release GitHub Action.'
+    context: 'Dependency management, dependency groups (including an examples group for uvicorn), and the one-click release GitHub Action.'
   - name: 'MkDocs'
-    context: 'mkdocs-material docs site, deployed on tag via GitHub Actions.'
+    context: 'mkdocs-material docs site (quickstart, mock-data, middleware, roadmap, worked example), deployed on tag via GitHub Actions.'
 githubUrl: 'https://github.com/tpemeja/fastmock'
 phases:
   - id: 'core-mocking'
@@ -62,11 +65,45 @@ phases:
       query, header, cookie, and body parameters against the endpoint's
       declared types before mocking a response, returning FastAPI's own
       422 shape on mismatch by reusing FastAPI's own validation utilities.
-      Deliberately never resolves Depends(...), so mocking a route never
-      triggers real auth or DB access."
+      Deliberately never resolves Depends(...). A later fix resolved path
+      parameters explicitly against the matched route, since every route
+      declaring one had been reporting it as missing."
+  - id: 'deterministic-responses'
+    status: 'done'
+    summary: "0.2.0's headline change: a response became a pure function
+      of the request. A seed derived from the base seed, method, path,
+      sorted query string, and canonicalised body reseeds polyfactory
+      immediately before generation, and polyfactory's clock-relative
+      temporal providers were anchored to a fixed window so timestamps
+      stop drifting between runs. Fault injection stays genuinely random."
+  - id: 'plausible-generation'
+    status: 'done'
+    summary: "Factory selection moved from scanning
+      BaseFactory.__subclasses__() (order-dependent, import-side-effect
+      populated) to an explicit DEFAULT_BASE_FACTORIES registry. A new
+      DEFAULT_PROVIDER_MAP infers plausible values from field names — a
+      `country` field now returns a country, not a random string — gated
+      on an exact type match so a field named `city` typed `int` still
+      generates an int."
+  - id: 'custom-factory-escape-hatch'
+    status: 'done'
+    summary: "MockData.factory accepts a caller-supplied polyfactory
+      factory for invariants a schema can't express, like a total that
+      must match its line items. Takes precedence over `type` as the more
+      specific instruction. A related fix corrected the unmockable-model
+      error path, which had raised AttributeError instead of the intended
+      ValueError."
+  - id: 'worked-example'
+    status: 'done'
+    summary: "A roadmap page positions fastmock as a realistic-fake-backend
+      tool with three explicit scope boundaries (no hand-written payloads,
+      no cross-field coherence, no statefulness), and a fully worked
+      storefront example exercises every feature together, with every
+      quoted value asserted by a test so the docs can't drift from the
+      library."
 relatedNotesSlugs: []
 order: 30
-progress: 85
+progress: 90
 ---
 
 import Callout from '../../components/content/Callout.astro';
@@ -83,16 +120,18 @@ SomeModel}}`. Add the middleware, optionally decorate a route with
 `@mock(...)`, and an endpoint returns a `polyfactory`-generated instance of
 its own declared response model instead of a hand-written stub — so the
 mocked shape can't drift from the real one, since there's only one model to
-begin with. Layered overrides (decorator, middleware default, request
-header) let element counts, status codes, latency, and failure rates be
-dialed in per route or per request, and request validation (opt-out)
-returns the same `422` a real implementation eventually would.
+begin with. As of 0.2.0 that response is also a pure function of the
+request: the same call returns the same plausible, field-name-aware data
+every time, across refreshes, restarts, and machines, while fault
+injection stays genuinely random on top of it.
 
 The initial commit is from June 2024. The project sat untouched for two
-years until it was picked back up in one sitting on 2026-08-08, which
-modernized the whole toolchain and shipped the two features, fault
-injection and request validation, that took it from a toy to something
-worth publishing.
+years until it was picked back up on 2026-08-08–09, which modernized the
+whole toolchain, shipped fault injection and request validation, and then
+— in the 0.2.0 push the very next day — made output deterministic and
+plausible, added a factory escape hatch for invariants no schema can
+express, and wrote a roadmap page that says out loud what fastmock will
+never try to do.
 
 ## Problem
 
@@ -111,6 +150,14 @@ worth publishing.
   still return FastAPI's own `422` on a bad request, but without needing
   the eventual real implementation's `Depends(...)` (auth, DB session) to
   exist or run just to validate.
+- **Random output makes a mock unusable for demos and integration tests.**
+  Two identical requests returning different data means a demo jumps
+  around on refresh, a screenshot can't be relied on, and a test can't
+  assert against a literal payload.
+- **A field's type alone doesn't say what it means.** A `country: str`
+  field generated an arbitrary 20-character string, correct by type but
+  useless at a glance, and some invariants (an order total matching its
+  line items) aren't expressible as a type at all.
 - **The 2024 code itself had rotted.** `setup.py`/`requirements*.txt`
   packaging, deprecated Pydantic v1 calls left in place despite a
   `pydantic>=2` dependency pin, and an OpenAPI test asserting the full
@@ -125,14 +172,14 @@ worth publishing.
 
 `FastMockDecorator` stores a `MockData` instance as an attribute on the
 decorated route function. `FastMockMiddleware.dispatch` matches the
-incoming request to a FastAPI `APIRoute` by regex-ing its path template
-(`get_matched_route`, since middleware runs before Starlette's own router
-has resolved anything), merges `MockData` from four sources in precedence
-order, and hands the result to `get_response`. That function looks up the
-declared model for whichever status code applies and generates it via
-`polyfactory`: a `Sequence`/`Mapping` response model recurses per-element
-through `get_model_factory`, everything else calls straight into a
-`polyfactory` factory or its Faker provider map.
+incoming request to a FastAPI `APIRoute` (`get_matched_route`, since
+middleware runs before Starlette's own router has resolved anything),
+merges `MockData` from four sources in precedence order, and hands the
+result to `get_response`. That function looks up the declared model for
+whichever status code applies and generates it via `polyfactory`: a
+`Sequence`/`Mapping` response model recurses per-element through
+`get_model_factory`, everything else calls straight into a `polyfactory`
+factory or its Faker provider map.
 
 <DecisionTable
   decisions={[
@@ -150,9 +197,9 @@ through `get_model_factory`, everything else calls straight into a
     },
     {
       label: 'Route matching',
-      chose: "Regex-match the request path against each APIRoute's own path template",
-      insteadOf: "Relying on Starlette's router to have already matched",
-      why: "BaseHTTPMiddleware runs before routing resolves the request, so matching has to happen independently just to know whether a request even hits a mocked route.",
+      chose: "Delegate to Starlette's own APIRoute.matches",
+      insteadOf: "A hand-rolled regex over the route's path template",
+      why: "The regex could not express path converters such as {item_id:int} or {file_path:path}; both mismatched under the earlier implementation. BaseHTTPMiddleware still has to match independently, since it runs before real routing resolves the request.",
     },
   ]}
 />
@@ -268,11 +315,218 @@ so it stays correct as FastAPI's own validation logic evolves.
   ]}
 />
 
-The new test file covers a valid request passing through without ever
-calling the route's `Depends()` dependency, an invalid body / missing
-query param / malformed JSON body all returning FastAPI-shaped 422s while
-still never calling the dependency, and `validate_request=False` disabling
-the check entirely.
+<Callout variant="lesson" title="Every route with a path parameter always 422'd, and no test caught it">
+  Middleware runs before Starlette's router populates `request.path_params`,
+  so `validate_request` saw every path parameter as missing — `GET
+  /items/42` against a route declared as `/items/{item_id}` failed
+  validation with the default settings on. `get_path_params` now resolves
+  them explicitly by calling `api_route.matches(request.scope)` itself. No
+  existing test declared a path parameter, which is how it shipped
+  unnoticed.
+</Callout>
+
+The test file for this feature covers a valid request passing through
+without ever calling the route's `Depends()` dependency, an invalid body /
+missing query param / malformed JSON body all returning FastAPI-shaped
+422s while still never calling the dependency, and
+`validate_request=False` disabling the check entirely.
+
+### Deterministic responses |#deterministic-responses|
+
+0.2.0's headline change. Before it, two identical requests returned
+different data, which made demos jump around on refresh and made
+integration tests impossible to write against a literal payload. The
+contract is now that **a response is a pure function of the request**:
+`fastmock/seeding.py` derives a seed from the configured base
+`MockData.seed`, the request method, path, sorted query string, and a
+canonicalised body (JSON re-serialised with sorted keys; form/multipart
+bodies excluded; only the first 64KB hashed), then reseeds polyfactory
+immediately before generation with no `await` in between, since the
+seeded state is shared process-wide.
+
+<BranchDiagram
+  source={{
+    name: 'Incoming request',
+    detail: 'method + path + sorted query string + canonicalised body',
+  }}
+  branchLabel="two independent sources of variation"
+  branches={[
+    {
+      name: 'Response payload — seeded',
+      detail: 'blake2b hash of the request, mixed with MockData.seed, reseeds polyfactory + Faker right before generation: deterministic',
+    },
+    {
+      name: 'Fault injection — unseeded',
+      detail: "fail_rate calls random.random() directly; polyfactory's seed_random never touches the stdlib random module, so failures stay genuinely random",
+    },
+  ]}
+  mergeLabel="both feed the same request/response cycle"
+  merge={{
+    name: 'JSONResponse',
+    detail: 'deterministic payload, non-deterministic outcome',
+  }}
+/>
+
+<Callout variant="lesson" title="A seed alone doesn't make temporal values reproducible">
+  Every one of polyfactory's temporal providers is anchored to the current
+  clock: `datetime` spans "-30y" to "now", `date` is bounded by today,
+  `time` and `timedelta` are measured from now. A seed fixes the *offset*
+  from that clock, not the value itself, so a `created_at` field still
+  drifted a little between two runs seconds apart — silently violating the
+  "pure function of the request" guarantee. `StableTemporalFactoryMixin`
+  draws all four types from a fixed 2000–2035 window instead, confirmed by
+  regression tests that were checked to fail without the fix.
+</Callout>
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Default behaviour',
+      chose: 'seed=1 by default, deterministic out of the box',
+      insteadOf: 'Opt-in determinism (seed=None by default)',
+      why: 'A documented breaking change in 0.2.0: most callers want stable demos and tests more than they want request-to-request variety, and variety is still one field away (seed=None).',
+    },
+    {
+      label: 'Body canonicalisation',
+      chose: 'Re-serialise JSON with sorted keys before hashing',
+      insteadOf: 'Hash the raw request bytes',
+      why: "Two clients sending the same logical payload with different key ordering or incidental whitespace should get the same response, not two different stable ones.",
+    },
+  ]}
+/>
+
+### Plausible generation |#plausible-generation|
+
+Factory selection moved out of `get_mock_factory_class` scanning
+`BaseFactory.__subclasses__()` — which reports only *direct* subclasses,
+is populated by import side effects, and made selection order-dependent —
+into `fastmock/factories.py`'s explicit, ordered `DEFAULT_BASE_FACTORIES`
+tuple (`ModelFactory`, `DataclassFactory`, `TypedDictFactory`). A new
+`DEFAULT_PROVIDER_MAP` then teaches those factories to look at a field's
+*name*, not just its type: a field called `country` now returns a country
+instead of a random string, via a `NameAwareFactoryMixin` layered over
+each base factory.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Factory selection',
+      chose: 'An explicit ordered registry in fastmock/factories.py',
+      insteadOf: 'Scanning BaseFactory.__subclasses__() at call time',
+      why: '__subclasses__() only reports direct subclasses and is populated by import side effects, so selection order depended on what happened to already be imported, and any factory subclassing ModelFactory rather than BaseFactory directly was never found.',
+    },
+    {
+      label: 'Name-based inference',
+      chose: 'A small, exact-match field-name → Faker provider map, gated on an exact type match',
+      insteadOf: 'Guessing from a substring or suffix, or trusting a name match unconditionally',
+      why: "A plausible-looking but wrong value is worse than obvious gibberish — gibberish tells you to reach for a custom factory, a wrong value silently misleads. The exact-type gate keeps a city field typed int an int, and stops a datetime provider from being accepted for a date field.",
+    },
+    {
+      label: 'provider_map placement',
+      chose: 'A FastMockMiddleware constructor argument',
+      insteadOf: 'A MockData field',
+      why: "It's global policy rather than a per-request value, and being a mapping of callables it couldn't ride the X-FASTMOCK-* header channel anyway — the rule later reused for factory.",
+    },
+  ]}
+/>
+
+<Callout variant="lesson" title="isinstance(x, type) on a parameterised generic differs between Python 3.10 and 3.11+">
+  `isinstance(list[str], type)` is `True` on 3.10 but `False` from 3.11
+  onward, which made `resolve_annotation` return the bare generic itself
+  on 3.10 instead of `None`. Behaviour was unaffected in practice — a
+  generic never satisfies `is_compatible`'s exact-type-match requirement
+  either way — but the version-dependent branch was worth removing at the
+  source rather than leaving it to coincidence. Verified against 3.10
+  through 3.13.
+</Callout>
+
+Deliberately absent from the default map: a bare `name`, too ambiguous to
+guess (a product, a bank, and a person are all equally plausible), left to
+`polyfactory` itself. Semantic types like `EmailStr` are left alone too —
+they already resolve correctly by type, so a name-based override would be
+redundant at best.
+
+### Custom factory escape hatch |#custom-factory-escape-hatch|
+
+Schema-driven generation produces fields that are individually plausible
+but unrelated: an order `total` that doesn't match its `line_items`, a
+`shipped` order with no `tracking_number`. Those invariants live in the
+caller's domain, not the schema, so fastmock doesn't guess at them.
+`MockData.factory` accepts a caller-supplied `polyfactory` factory that
+builds the response instead of one derived automatically from the model —
+applied per element for list responses, and taking precedence over `type`
+as the more specific instruction.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Precedence',
+      chose: 'factory overrides type whenever both are set',
+      insteadOf: 'Treating the two as independent or mutually exclusive',
+      why: 'A caller who supplies a factory has already opted out of schema-driven generation for that route; type would otherwise be ambiguous about which generation path wins.',
+    },
+    {
+      label: 'Configuration channel',
+      chose: 'A MockData field that cannot travel over an X-FASTMOCK-* header',
+      insteadOf: 'Trying to make it header-settable like every other MockData field',
+      why: "It's a callable — there's no sane string encoding for a polyfactory factory in a header value, the same non-scalar rule provider_map already followed on the middleware constructor.",
+    },
+  ]}
+/>
+
+<Callout variant="lesson" title="An unmockable model raised the wrong exception">
+  The fallback error path read `model.response_model.__name__`, but by
+  that point `model` already *is* the response model — it has no
+  `response_model` attribute of its own. Hitting an unsupported type
+  raised a confusing `AttributeError` instead of the intended
+  `ValueError: Cannot mock ...`. Found and fixed alongside the factory
+  escape hatch, not by a dedicated bug hunt.
+</Callout>
+
+### Worked example & roadmap |#worked-example|
+
+Two additions that turn the feature list into something a new user can
+actually evaluate. `documentation/docs/roadmap.md` states fastmock's
+positioning explicitly — a **realistic fake backend** for QA, staging,
+demos, and integration tests, pointed at `fastapi-mock`'s
+`raise NotImplementedError()` for the lower-friction "haven't built this
+yet" case — and three permanent scope boundaries. `examples/storefront.py`
+plus its walkthrough page exercise every feature together against one
+realistic API: name- and type-inferred customer data, seed-stable
+pagination, an `OrderFactory` encoding the total/tracking-number
+invariants, a custom `sku` provider, validation without declaring a 422,
+and the full header-override table.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Cross-field coherence',
+      chose: 'A per-route factory= escape hatch',
+      insteadOf: 'Guessing relationships between fields (e.g. total = sum(line_items))',
+      why: "Those invariants live in the caller's domain. A guessed one would be right for some callers and silently wrong for others.",
+    },
+    {
+      label: 'Statefulness',
+      chose: 'No store, ever — responses vary with the request but never echo it',
+      insteadOf: 'Making a POST followed by a GET return what was posted',
+      why: 'Keeps fastmock a realistic fake backend for QA/staging/demos/integration tests, not an attempt at a full fake server with persistence.',
+    },
+    {
+      label: 'Positioning vs. the placeholder use case',
+      chose: "Explicitly defer to fastapi-mock's raise NotImplementedError() for that case",
+      insteadOf: 'Trying to be the lowest-friction option for every use case',
+      why: 'fastmock trades setup simplicity for per-route/per-request control over shape, status, failure, and reproducibility — a different point on the trade-off curve, not a strictly better one.',
+    },
+  ]}
+/>
+
+<Callout variant="decision" title="Every quoted value in the docs is asserted by a test">
+  `tests/test_example_storefront.py` asserts the exact figures the
+  walkthrough page quotes, so the documentation cannot silently drift from
+  what the library actually returns. The same discipline applies to
+  `roadmap.md`'s worked snippets and the README's own example output,
+  refreshed in the same pass once responses became reproducible.
+</Callout>
 
 </PhaseCarousel>
 
@@ -284,25 +538,33 @@ What each piece of the stack is actually doing, and where to look for more:
 
 ## Approach
 
-Every feature reuses FastAPI's or Pydantic's own machinery instead of
-reimplementing it: `polyfactory` generates data straight from a model's
-own field types rather than a bespoke generator, request validation reuses
-FastAPI's own argument-resolution functions for byte-identical `422`
-shapes, and every new `MockData` field (`delay`, `fail_rate`,
-`validate_request`) becomes overridable through the decorator, the
-middleware default, and the request header simultaneously, for free,
-because all three layers are generic over whatever fields `MockData`
-happens to have rather than wired per-feature.
+Every feature reuses FastAPI's, Pydantic's, or polyfactory's own machinery
+instead of reimplementing it: request validation reuses FastAPI's own
+argument-resolution functions for byte-identical `422` shapes, seeding
+reuses polyfactory's own `seed_random` rather than a bespoke RNG, and
+route/path-parameter matching now delegates to Starlette's real
+`APIRoute.matches` instead of an approximation. Configuration follows one
+consistent rule as the surface has grown: `MockData` holds per-route and
+per-request knobs (`element_size`, `delay`, `seed`, `factory`), and the
+`FastMockMiddleware` constructor holds global policy
+(`retrieve_data_function_list`, `provider_map`). Every scalar on
+`MockData` is therefore overridable per-request through an `X-FASTMOCK-*`
+header for free; the two things that can't travel that way, `factory` and
+`provider_map`, are exactly the two non-scalar options, which is why both
+ended up on a different layer rather than by accident.
 
 ## Future improvements
 
-Grounded in the project's own README comparison table and what the code
+fastmock's own `roadmap.md` now separates permanent non-goals (hand-written
+payloads, cross-field coherence without an explicit factory, statefulness
+— see Worked example & roadmap above) from genuine gaps. Two of the latter
+remain, grounded in the README's own comparison table and what the code
 currently does:
 
-- **Multiple examples, randomly chosen per request**, closing the one gap
-  FastMock's own comparison table concedes to `fastapi-mock` today: a
-  route's `type=example` reads a single fixed `model_config` example
-  rather than picking from several.
+- **Multiple examples, randomly chosen per request** — still the one row
+  FastMock's own comparison table concedes to `fastapi-mock`: `type=example`
+  reads a single fixed `model_config` example rather than picking from
+  several.
 - **Non-JSON response mocking.** `get_response` always returns a
   `JSONResponse`; a route documented with a non-JSON response type has no
   way to be mocked to that shape.
