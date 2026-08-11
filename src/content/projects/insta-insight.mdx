@@ -12,6 +12,7 @@ technologies:
     'kotlinx.serialization',
     'DataStore',
     'EncryptedSharedPreferences',
+    'WorkManager',
     'Instagram Graph API',
   ]
 technologyNotes:
@@ -29,6 +30,8 @@ technologyNotes:
     context: 'Local caches: dashboard, follower history, unseen comments.'
   - name: 'EncryptedSharedPreferences'
     context: 'Keystore-backed storage for the single long-lived access token, pinned to security-crypto 1.0.0.'
+  - name: 'WorkManager'
+    context: 'Two narrow, self-rescheduling job chains that deliberately break the wake-only rule (new-post polling, midnight snapshot).'
   - name: 'Instagram Graph API'
     context: 'Instagram Login surface (graph.instagram.com), chosen for secret-free token refresh.'
 phases:
@@ -56,29 +59,48 @@ phases:
       pinning and pushing a token, since screen pinning does not survive a
       reboot.'
   - id: 'comment-surfacing'
-    status: 'in-progress'
+    status: 'done'
     summary: "Local-only tracker for unseen top-level comments/replies across
-      recent posts. Getting the comments endpoint to return anything at all
-      needed the Meta app switched from Development to Live mode, an
-      undocumented requirement; the tracker itself is built but not yet
-      wired into the dashboard UI."
+      recent posts, now wired into its own dashboard page: grouped by post,
+      reply threads indented under a guide line, tap-to-acknowledge with an
+      undo window, and a badge visible from any page. Getting the comments
+      endpoint to return anything at all needed the Meta app switched from
+      Development to Live mode, an undocumented requirement; a second Meta
+      quirk (replies returned twice per fetch) had to be filtered out too."
+  - id: 'audience-demographics'
+    status: 'done'
+    summary: "Age and top-country breakdown of accounts reached this month,
+      from Meta's reached_audience_demographics metric — the only audience
+      view a personal account gets, since it's an anonymized monthly
+      aggregate with no per-post or per-person breakdown."
+  - id: 'background-refresh-exceptions'
+    status: 'done'
+    summary: 'Two narrow, deliberate exceptions to the wake-only design: a
+      self-rescheduling chain polls a freshly published post every 5 minutes
+      for its first 24h (WorkManager periodic jobs floor at 15 minutes, too
+      coarse for this), and a second job fires once at local midnight so the
+      Growth page''s "today so far" baseline is accurate instead of whatever
+      the first wake of the day happens to catch.'
 relatedNotesSlugs: ['meta-graph-api-live-mode-comments']
 order: 20
-progress: 55
+progress: 75
 ---
 
 import Callout from '../../components/content/Callout.astro';
 import PhaseCarousel from '../../components/content/PhaseCarousel.astro';
 import TechStack from '../../components/content/TechStack.astro';
 import DecisionTable from '../../components/content/DecisionTable.astro';
+import Screenshot from '../../components/content/Screenshot.astro';
 
 ## Overview
 
 A single-purpose Android app for a tablet mounted where my wife can glance at
 her Instagram Creator account stats without opening the Instagram app and
 digging through its Insights UI. It wakes on a double-tap, fetches from the
-Instagram Graph API, and shows followers, reach, recent posts, and per-post
-metrics — kiosk-pinned so nothing else is reachable on the tablet.
+Instagram Graph API, and auto-rotates through a 7-page dashboard — followers,
+growth, the latest post, all-time totals, unseen comments, audience
+demographics, and history graphs — kiosk-pinned so nothing else is reachable
+on the tablet.
 
 Deliberately no backend: the app talks directly to `graph.instagram.com` and
 refreshes its own long-lived token in place, so there's no server to run or
@@ -116,6 +138,21 @@ entirely on-device.
 scheduled job, by design, since the tablet isn't always plugged in. A refresh
 fetches the profile, the last 6 posts' insights in parallel (`async` per
 item), and account-level reach, then writes the result to `DashboardCache`.
+The dashboard itself grew into a 7-page swipeable pager (auto-rotating on a
+timer by default, tap or swipe to move manually) as more pages got added —
+see the phases below.
+
+<Screenshot
+  src="/images/projects/insta-insight/dashboard.png"
+  alt="Insta Insight dashboard page showing follower count, 7-day reach, and the last three posts as a swipeable carousel with Reel/Post badges"
+  caption="Page 1 of the pager: follower count, 7-day reach, and the last posts/reels — the glance-while-walking-past view the whole app is built around."
+/>
+
+<Screenshot
+  src="/images/projects/insta-insight/totals.png"
+  alt="Insta Insight totals page showing follower count, engagement rate, total views, total saved, and total likes across the last 6 posts"
+  caption="One of the later pager pages: all-time and last-6-post totals, cached locally like everything else here."
+/>
 
 <Callout variant="decision" title="A failed refresh never clears a good cache">
   `refreshDashboard()` returns `FetchResult.Failure` on any exception, but
@@ -130,7 +167,7 @@ item), and account-level reach, then writes the result to `DashboardCache`.
       label: 'Refresh trigger',
       chose: 'Only on wake (onResume)',
       insteadOf: 'A background polling job',
-      why: "The tablet isn't always plugged in; polling on a schedule would drain battery for updates nobody's looking at between wakes.",
+      why: "The tablet isn't always plugged in; polling on a schedule would drain battery for updates nobody's looking at between wakes. (Two narrow, explicitly scoped exceptions were added later — see Background refresh exceptions.)",
     },
     {
       label: 'Token storage',
@@ -147,6 +184,12 @@ Tapping a post opens a richer breakdown than the dashboard tiles show: saves,
 shares, total interactions, and for video/reels, watch time — plus a set of
 newer or estimated metrics (`follows`, `profile_visits`, `reels_skip_rate`,
 `profile_activity`) that aren't reliably supported across accounts.
+
+<Screenshot
+  src="/images/projects/insta-insight/latest-post.png"
+  alt="Insta Insight latest post detail page showing the post thumbnail, caption, and views/likes/comments with each metric's share of views"
+  caption="The latest post's own pager page: views, likes, comments, and each one's share of views, refreshed on every wake."
+/>
 
 <Callout variant="lesson" title="One unsupported metric in a combined call zeroes out the whole response">
   Batching `reels_skip_rate` or `profile_activity` into the same
@@ -171,6 +214,12 @@ reach is different — Meta does expose a real time series for it — so that's
 backfilled ~30 days in one call instead of waiting to accumulate it wake by
 wake.
 
+<Screenshot
+  src="/images/projects/insta-insight/graphs.png"
+  alt="Insta Insight graphs page with three sparkline-style charts: follower growth over 31 days, daily change as green/red blocks, and 30-day reach"
+  caption="Follower growth and reach, both built from locally accumulated history rather than a Meta API that doesn't offer either as a real time series for followers."
+/>
+
 ### Kiosk mode |#kiosk-mode|
 
 `setShowWhenLocked(true)` + `setTurnScreenOn(true)` in `onCreate`, combined
@@ -185,7 +234,18 @@ through `onCreate` again).
 `CommentTrackerStore` tracks which top-level comments and replies on recent
 posts haven't been seen in the dashboard yet, entirely locally — it never
 calls a write endpoint, and doesn't rely on Instagram's own read/like state
-since neither is a reliable "have I seen this" signal.
+since neither is a reliable "have I seen this" signal. It now has its own
+page in the pager: comments grouped by post, replies indented under a guide
+line with "replying to @x" context, and a tap acknowledges one with a 4-second
+undo window before it's actually cleared. An unseen-count badge sits in the
+bottom bar rather than only on the comments page itself, so it's visible no
+matter which page happens to be showing when auto-rotation lands on it.
+
+<Screenshot
+  src="/images/projects/insta-insight/comments.png"
+  alt="Insta Insight comments page showing a comment thread with a question and a threaded reply indented beneath it"
+  caption="Comments grouped by post, with reply threads indented under a guide line. Tapping one starts its 4-second undo window before it's acknowledged for good."
+/>
 
 <Callout variant="warning" title="The comments endpoint needs the app in Live mode, not just a valid scope and tester">
   With a tester invite accepted and the `instagram_business_manage_comments`
@@ -196,10 +256,86 @@ since neither is a reliable "have I seen this" signal.
   data start coming back.
 </Callout>
 
-The tracker itself seeds silently on its first-ever run (everything that
-already exists is marked seen, so the feature starts at a real "0 unread"
-instead of surfacing a backlog), but it isn't wired into `MainActivity`'s
-dashboard yet — the data model and logic are done, the UI surface isn't.
+<Callout variant="lesson" title="Meta's nested reply expansion returns every reply twice">
+  Querying comments with the nested `replies{...}` field expansion returns
+  each reply twice: once flatly in the outer `data` array with full `from`
+  attribution, and again nested under its parent's `replies.data` with no
+  `from` field at all, confirmed empirically. Treating both as real would
+  double-count every reply and silently skip self-filtering on the nested
+  copy, since there's no username there to compare against the account's
+  own. The nested copy is only ever used to build an id → parent-username
+  lookup for "replying to @x" context; every actual comment is built from
+  the flat list, the only copy with reliable author data.
+</Callout>
+
+The tracker seeds silently on its first-ever run (everything that already
+exists is marked seen, so the feature starts at a real "0 unread" instead of
+surfacing a backlog of comments that predate it).
+
+### Audience demographics |#audience-demographics|
+
+`AudienceScreen` renders Meta's `reached_audience_demographics` metric — age
+and top-country breakdowns of accounts reached by this account's content in
+the current month. It's the closest thing the Graph API exposes to "who's
+watching," but it's a hard ceiling, not a starting point: Meta reports this
+only as an anonymized, account-wide monthly aggregate, with no per-post or
+per-person breakdown to drill into.
+
+<Screenshot
+  src="/images/projects/insta-insight/audience.png"
+  alt="Insta Insight audience page showing an age breakdown from 13-17 to 55-64 as horizontal bars, with reach counts per bracket"
+  caption="Age breakdown of accounts reached this month. Country breakdown sits below it, each entry rendered with a flag emoji derived from its ISO country code."
+/>
+
+<Callout variant="info" title="A flag emoji from a two-letter country code, no lookup table">
+  Regional-indicator emoji are assigned by Unicode code point in alphabetical
+  order starting from `0x1F1E6` for 'A', so a country's flag can be built by
+  mapping each letter of its ISO-3166 code onto that offset directly —
+  `code.map { 0x1F1E6 + (it - 'A') }` — instead of shipping a code → flag
+  table. `Locale("", code).displayCountry` fills in the localized name
+  alongside it.
+</Callout>
+
+### Background refresh exceptions |#background-refresh-exceptions|
+
+Two narrow, deliberately scoped exceptions to the wake-only design, both
+built the same way: a self-rescheduling chain of one-time `WorkManager`
+requests rather than `PeriodicWorkRequest`, whose 15-minute floor is an
+Android-enforced minimum with no way around it.
+
+<Screenshot
+  src="/images/projects/insta-insight/growth.png"
+  alt="Insta Insight growth page showing 'Today so far' and 'Yesterday' cards for followers, likes, and views"
+  caption="The Growth page's 'today so far' numbers — accurate only because of the midnight snapshot job below, not just whatever the first wake of the day happens to catch."
+/>
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'New-post tracking',
+      chose: "A 5-minute self-rescheduling chain, stateless about which post it's tracking",
+      insteadOf: 'A PeriodicWorkRequest tied to a specific post id',
+      why: "WorkManager's periodic floor is 15 minutes, too coarse for a first-24h trend. Re-deriving \"whichever post is currently latest\" from the API on every run also means a new post published mid-window gets picked up automatically, with nothing to reschedule.",
+    },
+    {
+      label: "Growth page's opening baseline",
+      chose: 'A one-time job pinned to local midnight, self-rescheduling for the next one',
+      insteadOf: 'Deriving "today so far" purely from wake-triggered fetches',
+      why: 'A wake-only baseline is whatever the numbers happen to be at the first wake of the day — hours late, or on a day the tablet is never woken, never captured at all.',
+    },
+  ]}
+/>
+
+<Callout variant="decision" title="Both jobs use ExistingWorkPolicy deliberately, and differently">
+  The public entry point for the new-post poller (`scheduleIfWithinWindow`,
+  called on every wake) uses `KEEP`, so re-arming it each wake is cheap and
+  never disturbs a chain already running. The worker's own self-chaining
+  call (`scheduleNext`) uses `REPLACE` instead, since at the moment it fires
+  the finishing run technically still "exists" as the unique work entry and
+  has to be able to win anyway. The midnight job mirrors this: `KEEP` from
+  `MainActivity.onCreate` (a harmless no-op once the chain is already
+  running), `REPLACE` from inside the worker itself.
+</Callout>
 
 </PhaseCarousel>
 
@@ -216,12 +352,13 @@ was the concrete failure that drove that pattern. The wake-only refresh
 model (no background service) and the never-clear-a-good-cache rule both
 follow from the same constraint: this runs unattended on a tablet nobody is
 actively watching, so a transient failure should degrade gracefully rather
-than surface as a blank screen or a drained battery.
+than surface as a blank screen or a drained battery. The two background-job
+exceptions (see Background refresh exceptions) kept that same discipline —
+narrowly scoped, self-terminating, and stateless enough that neither needed
+its own error-recovery path beyond WorkManager's own retry.
 
 ## Future improvements
 
-- **Wire `CommentTrackerStore` into the dashboard UI.** The tracking logic
-  and local storage are done; unseen comments don't surface anywhere yet.
 - **Proper pagination/backoff for all-time stats** if the account ever grows
   past the current ~100-post cap fetched in one call — fine today at 13
   posts, not built to scale further.
