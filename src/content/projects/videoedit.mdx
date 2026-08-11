@@ -75,6 +75,7 @@ import TechStack from '../../components/content/TechStack.astro';
 import ObjectDiagram from '../../components/content/ObjectDiagram.astro';
 import DecisionTable from '../../components/content/DecisionTable.astro';
 import BranchDiagram from '../../components/content/BranchDiagram.astro';
+import Screenshot from '../../components/content/Screenshot.astro';
 
 ## Overview
 
@@ -152,6 +153,18 @@ everything is editable in the UI before exporting SRTs.
       ],
     },
   ]}
+/>
+
+<Screenshot
+  src="/images/projects/videoedit/project-list.png"
+  alt="VideoEdit project list showing four projects, each with a scene/section count, plus the upload form for a new one"
+  caption="Every project is just a folder scanned off disk — no database. The upload form on top starts a new one from a CapCut export."
+/>
+
+<Screenshot
+  src="/images/projects/videoedit/workspace-captions.png"
+  alt="VideoEdit project workspace with the filmstrip of four detected scenes, dish context inputs, and a fully generated FR/EN caption table"
+  caption="The per-project workspace: scenedetect's scenes in the filmstrip, optional dish context above the captions, and Gemini's generated FR/EN captions per section below."
 />
 
 Dialogue sections get a hybrid transcription rather than a single Gemini or
