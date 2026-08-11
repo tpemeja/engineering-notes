@@ -1,8 +1,9 @@
 ---
 title: 'FastMock'
 description: 'Python middleware that mocks FastAPI endpoints from their own declared response models, with deterministic seeded responses, field-name-aware data, fault injection, and FastAPI-shaped request validation. Published on PyPI.'
-status: active
+status: completed
 startDate: 2024-06-02
+endDate: 2026-08-11
 technologies:
   [
     'Python',
@@ -98,7 +99,7 @@ phases:
       library."
 relatedNotesSlugs: []
 order: 30
-progress: 90
+progress: 95
 ---
 
 import Callout from '../../components/content/Callout.astro';
@@ -550,11 +551,13 @@ ended up on a different layer rather than by accident.
 
 ## Future improvements
 
-fastmock's own `roadmap.md` now separates permanent non-goals (hand-written
-payloads, cross-field coherence without an explicit factory, statefulness
-— see Worked example & roadmap above) from genuine gaps. Two of the latter
-remain, grounded in the README's own comparison table and what the code
-currently does:
+FastMock is stable and not under active development right now, so this is a
+list of known gaps rather than a roadmap. fastmock's own `roadmap.md`
+separates permanent non-goals (hand-written payloads, cross-field coherence
+without an explicit factory, statefulness — see Worked example & roadmap
+above) from genuine gaps. Two of the latter remain, grounded in the
+README's own comparison table and what the code currently does, if work on
+this picks back up:
 
 - **Multiple examples, randomly chosen per request** — still the one row
   FastMock's own comparison table concedes to `fastapi-mock`: `type=example`

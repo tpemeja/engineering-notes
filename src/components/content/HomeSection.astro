@@ -1,0 +1,49 @@
+---
+interface Props {
+  title: string;
+  href: string;
+  linkLabel: string;
+  external?: boolean;
+}
+
+const { title, href, linkLabel, external = false } = Astro.props;
+---
+
+<section class="home-section">
+  <div class="section-header">
+    <h2>{title}</h2>
+    {
+      external ? (
+        <a href={href} rel="noopener noreferrer" target="_blank">
+          {linkLabel} &rarr;
+        </a>
+      ) : (
+        <a href={href}>{linkLabel} &rarr;</a>
+      )
+    }
+  </div>
+  <slot />
+</section>
+
+<style>
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .section-header h2 {
+    margin: 0;
+    font-size: 1.125rem;
+  }
+
+  .section-header a {
+    font-size: 0.875rem;
+    color: var(--color-accent);
+    white-space: nowrap;
+  }
+</style>
