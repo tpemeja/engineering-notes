@@ -1,8 +1,13 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import { getAllTags } from '../../lib/tags';
+import { getTagCategory, TAG_CATEGORY_ORDER } from '../../lib/tag-categories';
 
 const tags = await getAllTags();
+const groups = TAG_CATEGORY_ORDER.map((category) => ({
+  category,
+  tags: tags.filter((tag) => getTagCategory(tag.label) === category),
+})).filter((group) => group.tags.length > 0);
 ---
 
 <BaseLayout title="Tags" description="Browse all projects, journal entries, and notes by tag.">
@@ -11,17 +16,22 @@ const tags = await getAllTags();
       <h1>Tags</h1>
       <p>Every tag used across projects, journal entries, and notes.</p>
     </header>
-    <ul class="tag-cloud">
-      {
-        tags.map((tag) => (
-          <li>
-            <a href={`/tags/${tag.slug}/`}>
-              {tag.label} <span class="tag-count">{tag.count}</span>
-            </a>
-          </li>
-        ))
-      }
-    </ul>
+    {
+      groups.map((group) => (
+        <section class="tag-group">
+          <h2>{group.category}</h2>
+          <ul class="tag-cloud">
+            {group.tags.map((tag) => (
+              <li>
+                <a href={`/tags/${tag.slug}/`}>
+                  {tag.label} <span class="tag-count">{tag.count}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))
+    }
   </div>
 </BaseLayout>
 
@@ -43,6 +53,19 @@ const tags = await getAllTags();
 
   .page-header p {
     margin: 0;
+    color: var(--color-fg-muted);
+  }
+
+  .tag-group {
+    margin-bottom: 1.75rem;
+  }
+
+  .tag-group h2 {
+    margin: 0 0 0.75rem 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
     color: var(--color-fg-muted);
   }
 

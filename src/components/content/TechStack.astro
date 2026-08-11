@@ -1,41 +1,91 @@
 ---
 import TagBadge from '../ui/TagBadge.astro';
+import { getTagCategory, TAG_CATEGORY_ORDER } from '../../lib/tag-categories';
 
 interface Props {
   notes: Array<{ name: string; context: string }>;
 }
 
 const { notes } = Astro.props;
+
+const groups = TAG_CATEGORY_ORDER.map((category) => ({
+  category,
+  notes: notes.filter((note) => getTagCategory(note.name) === category),
+})).filter((group) => group.notes.length > 0);
 ---
 
 {
-  notes.length > 0 && (
-    <ul class="not-prose tech-stack">
-      {notes.map((note) => (
-        <li>
-          <TagBadge tag={note.name} size="md" />
-          <p class="tech-stack-context">{note.context}</p>
-        </li>
+  groups.length > 0 && (
+    <div class="not-prose tech-stack">
+      {groups.map((group) => (
+        <div class="tech-stack-group">
+          <p class="tech-stack-category">
+            <span class="tech-stack-dot" aria-hidden="true" />
+            {group.category}
+          </p>
+          <ul class="tech-stack-list">
+            {group.notes.map((note) => (
+              <li>
+                <TagBadge tag={note.name} size="md" />
+                <p class="tech-stack-context">{note.context}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
       ))}
-    </ul>
+    </div>
   )
 }
 
 <style>
   .tech-stack {
-    list-style: none;
-    margin: 1.5rem 0;
-    padding: 0;
+    margin: 1.75rem 0;
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 1rem;
   }
 
-  .tech-stack li {
+  .tech-stack-group {
+    border: 1px solid var(--color-border);
+    border-radius: 0.75rem;
+    background-color: var(--color-bg-subtle);
+    padding: 1.1rem 1.25rem 1.25rem;
+  }
+
+  .tech-stack-category {
     display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 0.6rem 0.85rem;
+    align-items: center;
+    gap: 0.55rem;
+    margin: 0 0 0.9rem 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-fg-muted);
+  }
+
+  .tech-stack-dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    background-color: var(--color-accent);
+  }
+
+  .tech-stack-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: minmax(8rem, max-content) minmax(0, 1fr);
+    align-items: center;
+    row-gap: 0.75rem;
+    column-gap: 1.25rem;
+  }
+
+  .tech-stack-list li {
+    display: contents;
   }
 
   .tech-stack-context {
@@ -43,6 +93,23 @@ const { notes } = Astro.props;
     color: var(--color-fg-muted);
     font-size: 0.9375rem;
     line-height: 1.5;
-    flex: 1 1 20rem;
+  }
+
+  @media (max-width: 40rem) {
+    .tech-stack-group {
+      padding: 1rem 1.1rem 1.15rem;
+    }
+
+    .tech-stack-list {
+      grid-template-columns: 1fr;
+      row-gap: 1rem;
+    }
+
+    .tech-stack-list li {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.4rem;
+    }
   }
 </style>

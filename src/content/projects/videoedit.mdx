@@ -6,29 +6,25 @@ startDate: 2026-07-11
 technologies:
   [
     'Python',
-    'FastAPI',
     'React',
-    'TypeScript',
-    'PySceneDetect',
     'faster-whisper',
     'Gemini',
-    'ffmpeg',
   ]
 technologyNotes:
   - name: 'Python'
     context: 'Backend language for the pipeline and AI calls.'
+  - name: 'TypeScript'
+    context: 'Typed frontend, sharing shapes with the backend models.'
   - name: 'FastAPI'
     context: 'Serves the local API the React frontend talks to.'
   - name: 'React'
     context: 'Powers the local web UI, built with Vite.'
-  - name: 'TypeScript'
-    context: 'Typed frontend, sharing shapes with the backend models.'
-  - name: 'PySceneDetect'
-    context: 'Splits the raw export into scenes via content detection.'
   - name: 'faster-whisper'
     context: 'Per-language transcription passes feeding the Gemini merge.'
   - name: 'Gemini'
     context: 'Generates captions, merges transcripts, and translates.'
+  - name: 'PySceneDetect'
+    context: 'Splits the raw export into scenes via content detection.'
   - name: 'ffmpeg'
     context: 'Extracts audio clips and measures/renders LUFS loudness.'
 phases:
