@@ -36,10 +36,12 @@ in this phase: OpenSpiel's agent library is broad and well-built, but
 nothing about using it correctly for an imperfect-information game like
 Belote is automatic, reproducibility included.
 
+Fixed upstream in
+[open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584),
+with a regression test for seeded determinism. Merged 2026-08-25, my first
+merged open-source PR.
+
 ## Next steps
 
-- [open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584)
-  merged upstream (2026-08-25) with the fix and a regression test for
-  seeded determinism. First open-source PR of mine to get merged.
 - Re-verify every ISMCTS result gathered before this fix was in place, in
   case any of it was quietly relying on non-reproducible rollouts.
