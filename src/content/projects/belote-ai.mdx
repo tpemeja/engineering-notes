@@ -778,10 +778,10 @@ approach real bridge- and poker-playing programs use.
   falling back to wall-clock time regardless of the seed passed in. The
   C++ implementation was unaffected, only the Python constructor call was
   wrong. Two identically-seeded ISMCTS runs looked reproducible right up
-  until they weren't. Filed upstream as
-  [open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584),
-  with a test added to confirm seeded bots now behave identically across
-  runs.
+  until they weren't. Fixed upstream in
+  [open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584)
+  (merged), with a test added to confirm seeded bots now behave identically
+  across runs. My first merged open-source PR.
 </Callout>
 
 ---
@@ -955,8 +955,8 @@ Every phase above was built and evaluated against the harness before moving
 to the next, rather than assumed. That discipline paid for itself
 repeatedly: it caught a plain-MCTSBot "cheat" (full hand visibility during
 rollout), an unseeded resampler silently breaking ISMCTS reproducibility
-(filed upstream as
-[open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584)),
+(fixed upstream in
+[open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584), merged),
 and a promising epsilon-greedy result that looked real at 1,000 simulated
 deals but collapsed to statistically indistinguishable at 10,000, each one
 caught
