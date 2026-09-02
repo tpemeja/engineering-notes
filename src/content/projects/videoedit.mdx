@@ -1,7 +1,7 @@
 ---
 title: 'VideoEdit'
 description: 'Local web app that turns a CapCut cooking-video export into bilingual captions and dialogue transcripts, either as SRTs or written straight back into the CapCut draft.'
-status: paused
+status: active
 startDate: 2026-07-11
 technologies:
   [
@@ -60,9 +60,29 @@ phases:
     summary: 'Round-trippable CSV export/import per section-kind, with a
       row-id scheme that doubles as a caption splitter/merger and a
       delimiter sniffer to survive an Excel re-save.'
+  - id: 'caption-chat-history'
+    status: 'done'
+    summary: 'Replaced the one-shot "generate all captions" button with a
+      persistent global caption chat and a section lock, backed by a
+      caption/transcript history system: per-line snapshots keyed by time
+      range, whole-section snapshots across split/unsplit changes, a
+      self-healing dedup pass, and word-level diff highlighting on every
+      history preview.'
+  - id: 'caption-examples-hook'
+    status: 'done'
+    summary: 'Added real-caption few-shot examples pulled from picked
+      CapCut drafts, individually flagged for recipe-step vs. hook use,
+      plus a new "hook" section kind for the video''s opening line that
+      reuses the cooking-section editor and chat UI end to end.'
+  - id: 'capcut-config-check'
+    status: 'done'
+    summary: 'Read-only step flagging captions in the linked CapCut draft
+      whose position and style disagree about whether they''re primary or
+      secondary, built after a caption copy-pasted into the wrong track''s
+      slot and never restyled.'
 relatedNotesSlugs: []
 order: 10
-progress: 85
+progress: 90
 ---
 
 import Callout from '../../components/content/Callout.astro';
@@ -113,9 +133,8 @@ the editor she actually works in, not just a technically-correct SRT file.
 
 ## Phases
 
-Six phases so far, from the first working pipeline slice to a CapCut
-position-calibration workflow that fixes a wrap problem CapCut itself gives
-no direct signal for:
+Nine phases so far, from the first working pipeline slice to a read-only
+check that catches a CapCut draft edited by hand out from under the app:
 
 <PhaseCarousel phases={frontmatter.phases}>
 
@@ -477,6 +496,155 @@ to the editor card it came from.
   regardless of locale.
 </Callout>
 
+### Caption chat & history |#caption-chat-history|
+
+The original "generate captions for all sections" button was one-shot:
+call it, captions land immediately, no memory of what was just proposed.
+A bad batch was expensive to walk back and impossible to steer
+mid-generation. It's replaced by a **global caption chat**, a persistent,
+project-wide conversation that proposes captions for every non-locked
+cooking section per turn and never auto-applies, plus a general
+caption/transcript **history** system that every kind of write, manual
+edit, chat apply, translate, or CSV import, now feeds into.
+
+<ObjectDiagram
+  arrowLabel="every write snapshots into"
+  nodes={[
+    {
+      name: 'Section',
+      fields: [
+        { name: 'captions_locked', detail: 'excludes this section from future global-chat turns' },
+        { name: 'caption_history', detail: 'per-(start, end) snapshots, oldest dropped past 5' },
+        { name: 'section_history', detail: 'whole-section snapshots spanning a split/unsplit change' },
+      ],
+    },
+    {
+      name: 'CaptionHistoryEntry / CaptionSectionSnapshot',
+      fields: [
+        { name: 'source', detail: 'manual / chat / global-chat / translate / csv / revert' },
+        { name: 'timestamp', detail: 'shared across a whole batch apply, for grouping' },
+      ],
+    },
+  ]}
+/>
+
+Proposals from the global chat render as a batch review list, checkbox
+per section, current text against proposed, with one "Apply N selected"
+button, mirroring the Balance Audio Levels preview/apply pattern instead
+of per-section "Use this" buttons. Applied state tracks per section
+rather than for the whole batch, so undoing one applied section, or
+adding one you'd originally skipped, doesn't mean redoing the rest.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'History key',
+      chose: "A line's own (start, end) time range",
+      insteadOf: 'Array index or a stored id',
+      why: 'Robust to sibling lines being inserted, reordered, or removed around it, so a single split caption line stays independently revertible from its neighbors.',
+    },
+    {
+      label: 'Sequential subtitles',
+      chose: 'Whole-section snapshot only, no per-line history',
+      insteadOf: 'Per-line history with a line_index fallback for retimes',
+      why: "Retiming a split line (drag, \"space evenly\") breaks the (start, end) key that per-line history depends on. A line_index fallback worked, but the simpler fix asked for was dropping per-line history for split content entirely.",
+    },
+    {
+      label: 'Dedup guard',
+      chose: 'Skip appending when the text matches any existing entry for that key',
+      insteadOf: 'Only checking the immediately-preceding entry',
+      why: 'Manual edits autosave on every keystroke, and retyping back to an earlier value is common. Checking only the previous entry still let real duplicates accumulate at non-adjacent positions.',
+    },
+  ]}
+/>
+
+<Callout variant="lesson" title="A dedup guard only stops new duplicates, not ones already saved">
+  Fixing the dedup guard stopped new duplicate entries but did nothing
+  for history lists that already had them, some going back to before the
+  guard existed. A self-healing pass runs on every section on every
+  project load and collapses each history list down to one occurrence per
+  distinct value, keeping the most recent. Confirmed directly against a
+  real project: 4 duplicate entries for one caption collapsed to 1 the
+  next time it was opened, no edit required.
+</Callout>
+
+Reverting a snapshot now records the value it's about to overwrite
+first, under a dedicated "revert" source, so undoing a revert is just
+reverting again instead of having nothing to go back to. Every history
+preview, the per-line popover, the section history panel, the
+global-chat review list, renders as a word-level diff against the
+section's current live value rather than plain text, so a preview
+answers "what would actually change right now," not just "what did this
+used to say."
+
+### Caption examples & video hook |#caption-examples-hook|
+
+Two related caption-quality additions: real-caption few-shot examples
+pulled from past CapCut projects, and a dedicated "hook" section kind for
+the video's opening line.
+
+**Example projects** (`Profile.example_projects`): pick CapCut drafts in
+Settings whose captions are already good, and every one of their real
+captions gets extracted, reusing the same top-two-text-tracks-by-position
+heuristic as style extraction, as a candidate few-shot example,
+individually flagged for whether it's a recipe-step example, a hook
+example, both, or neither. Gemini gets whichever ones are flagged on as
+real past outputs to imitate the voice of, kept separate from the style
+prompt the same way per-language grammar notes already were.
+
+<Callout variant="decision" title="A time cutoff seeds the flags, but the flags are the real mechanism">
+  Extraction defaults `use_for_hook` on for whatever falls before a
+  configurable cutoff, and `use_for_captions` on for everything, but a
+  time cutoff alone can't reliably tell which lines were actually the
+  hook. Settings shows every extracted caption as a checkbox pair
+  instead, so each one can be reviewed and corrected. An earlier version
+  auto-split by cutoff with no override; the ask that replaced it was to
+  see the real subtitles and choose.
+</Callout>
+
+**Hook** is a fourth `SectionKind` alongside cooking/dialogue/custom: the
+video's opening line, attention-grabbing rather than an instruction,
+marked the same click-to-cycle way as the other three, with no
+cardinality enforcement. It reuses the exact caption editor and chat UI
+cooking sections use, `CaptionEditor` gained a `kind` prop rather than a
+separate `HookEditor` component, since the two are otherwise identical:
+same history buttons, same translate, same split-into-lines. A hook can
+still be a short sequence (a question, then a reveal), so
+`chat_about_hook` keeps the same single-or-split proposal schema as the
+per-section cooking chat, just with hook-specific wording and its own
+style prompt and keyframe/dish-context toggles. Hook sections are
+automatically excluded from the global caption chat, which already
+hard-filters to cooking sections, and get their own step between
+Captions and Transcripts.
+
+### CapCut configuration check |#capcut-config-check|
+
+A read-only step that flags captions already written into the linked
+CapCut draft whose position and style disagree about which role,
+primary or secondary, they actually belong to. Built after a real
+incident: a caption copy-pasted from the primary track into the
+secondary track's slot, text edited, but never restyled to match.
+
+The check reads every text segment currently in the draft's
+`draft_info.json` fresh off disk, not just what the app itself wrote,
+since the failure mode it's built for happens through edits made
+directly in CapCut, outside the app's own bookkeeping. Each segment gets
+classified two ways, independently: by *position role* (its transform
+closer to the primary or secondary preset's own anchor, a coarser check
+than the real per-wrap-bucket positions the direct-write path uses,
+since telling primary from secondary apart doesn't need bucket-level
+precision) and by *style role* (exact-field match count against both
+presets, with fields that legitimately vary per wrap bucket or that
+CapCut sets to its own factory defaults excluded, so they don't dilute
+the match).
+
+<Callout variant="decision" title="Issues only, no fix action">
+  The check surfaces a list of disagreements and nothing else: no
+  pass/fail recap, no one-click fix. A mismatch might be an intentional
+  one-off, and silently overwriting it on the app's own judgment could
+  destroy a deliberate customization. Read-only by design.
+</Callout>
+
 </PhaseCarousel>
 
 ## Tech stack
@@ -488,13 +656,18 @@ What each piece of the stack is actually doing, and where to look for more:
 ## Approach
 
 Every CapCut-facing feature (direct-write, audio levels, position
-calibration) was built and verified against a real CapCut install rather
-than against assumptions about the format, since none of it is documented.
-That discipline caught concrete, otherwise-invisible failures: captions
-that looked written but never rendered (the untouched nested Timelines
-copy), orphaned duplicate tracks from a desynced remembered-ids state file,
-and a spike-flattened clip that a flat gain formula would have silently
-left inconsistent with its neighbors.
+calibration, configuration check) was built and verified against a real
+CapCut install rather than against assumptions about the format, since
+none of it is documented. That discipline caught concrete, otherwise-
+invisible failures: captions that looked written but never rendered (the
+untouched nested Timelines copy), orphaned duplicate tracks from a
+desynced remembered-ids state file, a spike-flattened clip that a flat
+gain formula would have silently left inconsistent with its neighbors,
+and a caption edited by hand in CapCut that kept its old track's styling,
+which the configuration check exists specifically to catch. The same
+build-against-real-usage discipline caught a quietly-accumulating
+duplicate-history bug in the caption history system, only visible once
+looked for directly in a real project's saved data.
 
 ## Future improvements
 

@@ -17,7 +17,6 @@ const featuredProjects = projects.slice(0, 2);
 const recentJournal = journalEntries.slice(0, 3);
 const recentNotes = notes.slice(0, 4);
 
-const publicSinceYear = Math.min(...projects.map((project) => project.data.startDate.getFullYear()));
 const currentProject = projects.find((project) => project.data.status === 'active');
 ---
 
@@ -36,10 +35,6 @@ const currentProject = projects.find((project) => project.data.status === 'activ
         <div class="stat-tile">
           <dt>Projects</dt>
           <dd><a href="/projects/">{projects.length}</a></dd>
-        </div>
-        <div class="stat-tile">
-          <dt>Public since</dt>
-          <dd>{publicSinceYear}</dd>
         </div>
         {
           currentProject && (
