@@ -60,16 +60,29 @@ phases:
       pointing at evaluator quality rather than search budget as the real
       bottleneck."
   - id: 'guided-rollout-value-function'
-    status: 'in-progress'
+    status: 'done'
     summary: 'A heuristic rollout evaluator swap for ISMCTS default random
       rollouts, using the actual tournament champion, lead_conserve_trump,
       to drive it. The most promising result in the project so far, +3.43
       pts/deal, a hair from significance, though adding diversity back on
-      top of it made things worse. The learned value network attempt is
-      still being written up.'
+      top of it made things worse. The learned value network itself never
+      recovered, but a follow-up diagnosis found its failure was mostly a
+      leaking train/val split plus a loss fitting the wrong statistic:
+      fixing both took overall R² from +0.103 to +0.376, yet bid states
+      stayed near zero even fixed, pointing straight at the need for a
+      purpose-built bidding network instead.'
+  - id: 'bidding-net'
+    status: 'done'
+    summary: "A purpose-built network for the take-or-pass decision,
+      trained on Monte-Carlo-averaged labels instead of single noisy
+      deals. Beats the project's long-standing champion by +28.00
+      pts/deal, 95% CI [+24.36, +31.64]. Five separate ways of improving
+      it (more deals, a bigger network, training longer, self-play
+      iteration, more precise labels) were each measured and came back
+      flat, closing bidding as a line of work at this representation."
 relatedNotesSlugs: []
 order: 10
-progress: 45
+progress: 60
 ---
 
 import Callout from '../../components/content/Callout.astro';
@@ -77,6 +90,7 @@ import PhaseJournal from '../../components/content/PhaseJournal.astro';
 import PhaseCarousel from '../../components/content/PhaseCarousel.astro';
 import TechStack from '../../components/content/TechStack.astro';
 import ObjectDiagram from '../../components/content/ObjectDiagram.astro';
+import NetworkDiagram from '../../components/content/NetworkDiagram.astro';
 import DecisionTable from '../../components/content/DecisionTable.astro';
 import ConfidenceIntervalChart from '../../components/content/ConfidenceIntervalChart.astro';
 import BranchDiagram from '../../components/content/BranchDiagram.astro';
@@ -941,6 +955,231 @@ forward from step 03's plain `ISMCTSBot` (random rollout) against the same
 opponent (-17.35 pts/deal there vs -6.23 here). Search with a good rollout
 policy narrows the gap at only 25 simulations, it doesn't close it.
 
+---
+
+The learned value network itself was the other half of this phase, and it
+never worked: trained as an ISMCTS leaf evaluator, it lost decisively,
+worse than random rollouts. The open question when this phase was first
+written up was whether that was a real finding about value functions in
+this game, or a bug.
+
+Mostly a bug. A follow-up run trained a 2x2 grid of (leaking split, grouped
+split) × (SmoothL1, MSE) on identical data, with 10% of deals held out
+before any arm saw them:
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Train/val split',
+      chose: 'Split by deal',
+      insteadOf: 'Split by decision (the original recipe)',
+      why: "Every decision inside one deal shares that deal's outcome, so splitting by decision lets validation rows leak the answer. Fixing this alone moved R² +0.103 → +0.354.",
+    },
+    {
+      label: 'Loss function',
+      chose: 'MSE',
+      insteadOf: 'SmoothL1 (the original recipe)',
+      why: 'At this scale SmoothL1 fits a conditional median. A failed contract is a hard point mass at a large negative score, so the median jumps between outcomes instead of averaging them, and every consumer of this number wants an average.',
+    },
+  ]}
+/>
+
+Applying both took overall R² from **+0.103 to +0.376** and turned every
+game-phase estimate positive. So "a learned value function does not work
+in this game" was substantially a statement about a leaking split and the
+wrong loss, not about value functions.
+
+<Callout variant="lesson" title="One phase's diagnosis became the next phase's starting point">
+  One number kept the fix from being the end of the story: even corrected,
+  bid-state accuracy stayed near zero (**R² +0.016**). A general-purpose
+  value net, however well trained, apparently cannot represent what a bid
+  decision is worth. That is what the next phase is built around, not a
+  bigger or better-trained version of this network, but a small,
+  purpose-built one that only ever looks at bid states.
+</Callout>
+
+### Bidding net |#bidding-net|
+
+<PhaseJournal projectSlug="belote-ai" phaseId="bidding-net" />
+
+With bidding singled out as its own problem, two things needed fixing
+before any network could help, neither of them about model architecture.
+
+---
+
+**The auction was invisible.** A bid1 state and the bid2 state that
+follows it produced a bit-identical `information_state_tensor` for the
+same player — same 5 cards, same turned card, no trump decided yet — with
+only 9 of 1,310 dimensions ever non-zero at a bid state. No policy could
+condition on which bidding round it was in, or on how many opponents had
+already passed. It was also a perfect-recall violation: a player couldn't
+remember their own pass.
+
+<Callout variant="lesson" title="A near-empty tensor is still a passing test suite">
+  1,310 dimensions with only 9 ever set isn't a bug a test catches by
+  itself, every one of those dimensions is technically correct, just
+  structurally useless at this state. `BeloteState` now records
+  `_bid1_passes`/`_bid2_passes` directly, and the observer gained a
+  `bid_round` block plus a perfect-recall pass record. Growing the tensor
+  1,299 → 1,310 dimensions was the fix; the other ~1,300 were never the
+  problem.
+</Callout>
+
+Before any network, the hand-written bid rule got a second look too.
+`hand_strength` (v2) fixed three blind spots the original rule had: trump
+length, the turned card the taker actually receives (worth 20 points on
+its own if it's the trump jack, previously scored as worth nothing), and
+seat/auction position — worth **+35.01 pts/deal** against the
+long-standing champion, and **+11.12** against that same champion retuned
+to a better threshold instead. First agent in the project to beat the
+champion, and it contains no learning at all.
+
+---
+
+`BidNet` is what a network gets to add once the auction is actually
+visible and a rule that plays it well already exists to be a training
+opponent. It answers one question:
+
+> How many points better or worse off am I if I take, compared with
+> passing?
+
+Positive means take; negative means pass. Every earlier rule compared a
+hand's point total against a fixed threshold, which has no representation
+of what *passing* is worth — and passing is not worth zero: the auction
+continues, someone else may take, the deal may be redealt. BidNet
+estimates both sides and compares them, which is the substantive
+difference, not the fact that it's a network.
+
+<NetworkDiagram
+  layers={[
+    { label: 'Input', size: 61, detail: 'trump-relative, canonicalised' },
+    { label: 'Hidden 1', size: 128, detail: 'Linear → ReLU → Dropout 0.1' },
+    { label: 'Hidden 2', size: 64, detail: 'Linear → ReLU → Dropout 0.1' },
+    { label: 'Output', size: 1, detail: 'take-vs-pass advantage (points)' },
+  ]}
+  caption="16,257 parameters total, 68 KB on disk."
+/>
+
+Two choices in the encoding turned out to matter: the hand always includes
+the **turned card** (you receive it if you take, so leaving it out
+undervalues taking the trump jack to zero — exactly the old rule's blind
+spot), and the three side suits are **canonicalised**, sorted
+longest-and-strongest first relative to the candidate trump, so one hand
+shape becomes one input instead of 24 relabelings of it. Both symmetries
+are asserted by tests rather than assumed.
+
+What the 61 numbers actually produce, run through the trained checkpoint
+rather than invented:
+
+| Hand held | Turned card | Candidate trump | BidNet's output | Call |
+|---|---|---|---|---|
+| 9♠ K♠ A♦ A♥ 10♣ | J♠ | Spades | **+97.6** | Take |
+| 7♣ 8♦ 9♥ 10♣ Q♦ | 7♠ | Spades | **-88.2** | Pass |
+| 7♣ 8♦ 9♥ 10♣ Q♦ | J♠ | Spades | **-6.8** | Pass |
+
+The first two are the easy cases: a hand with real trump length and two
+side aces is worth taking by a wide margin, and a hand with no trump at all
+picking up a weak trump card is not. The third is the same weak hand as
+the second, with only the turned card swapped for the trump jack — worth
+20 points and the highest trump, guaranteed. That single swap moves the
+output **+81.4 points**, from a clear pass to a near-miss. It still passes,
+but not by much, which is exactly the old v1 rule's blind spot made
+visible: it would have scored that swap as worth nothing at all, since it
+never looked at the card it was about to receive.
+
+---
+
+The part that actually made the network work wasn't the network. Labelling
+one decision means knowing what taking is worth, but the other three hands
+are hidden, and playing a single deal out gives an answer that swings by
+about 138 points — more noise than signal. The generator instead
+**re-deals the unknown cards 24 times**, plays each version out twice (once
+taking, once passing, from the same shuffle), and averages:
+
+```
+advantage = average(margin when taking) - average(margin when passing)
+```
+
+That brings per-answer noise down to about 28 points against a real signal
+that varies by about 59, roughly a five-fold improvement in signal clarity
+that earlier attempts in this project never had, because they all learned
+from single deals.
+
+<ConfidenceIntervalChart
+  unit="pts/deal"
+  metrics={[
+    { label: 'BidNet vs champion (hand_points@49)', mean: 28.00, ciLower: 24.36, ciUpper: 31.64, highlight: true },
+    { label: 'BidNet vs retuned champion (hand_points@39)', mean: 15.88, ciLower: 12.46, ciUpper: 19.30 },
+    { label: 'BidNet vs hand_strength@71 (v2)', mean: 11.25, ciLower: 7.65, ciUpper: 14.86 },
+  ]}
+/>
+
+Measured on a high-precision test set (each answer averaged over 384
+re-deals, leaving only ~7 points of noise in the yardstick itself):
+**94.2% right calls** against 71.8% for always passing, explained
+variation **0.899**. For comparison, the project's general-purpose value
+net scores **-0.065** at these same states — worse than always guessing
+the average.
+
+<Callout variant="lesson" title="A margin against a shared opponent is not a ranking">
+  `hand_strength@71` (v2) beats the champion by more (+35.01) than BidNet
+  does (+28.00), yet BidNet beats `hand_strength@71` head-to-head
+  (+11.25). Both are true and neither is an error: BidNet was trained
+  specifically as a best response to v2, and margins against a common
+  opponent don't form a total order. Recorded rather than smoothed over.
+</Callout>
+
+---
+
+Every further lever tried on `BidNet` came back flat:
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'More deals',
+      chose: 'Measured: flat',
+      insteadOf: 'Assumed more data would help',
+      why: 'Held-out explained variation went +0.727 → +0.745 across 2,700 → 21,600 training deals; doubling from half to full data bought +0.004.',
+    },
+    {
+      label: 'Bigger network',
+      chose: 'Measured: flat',
+      insteadOf: 'Assumed more capacity would help',
+      why: 'A 64x32 network scores +0.743; a 512x256x128 network, 8x the capacity, scores +0.744.',
+    },
+    {
+      label: 'Train longer',
+      chose: 'Measured: flat',
+      insteadOf: 'Assumed under-training',
+      why: 'Validation loss goes flat from epoch ~80 and never exceeds training loss, so it never overfit either, it simply finished learning what the data contains.',
+    },
+    {
+      label: 'Learn from itself',
+      chose: 'Measured: flat',
+      insteadOf: 'Assumed self-play iteration would find a better policy',
+      why: 'A generation trained against generation 1 as the reference ties it, +0.84 pts/deal, 95% CI [-2.36, +4.03]. The fixed point converged in one step: no best-response cycling, but no gain either.',
+    },
+    {
+      label: 'More precise labels',
+      chose: 'Measured: flat, and worse head-to-head',
+      insteadOf: 'Assumed noisier labels were the ceiling',
+      why: 'The same compute spent as 4x the re-deals over 4x fewer decisions scores identically (0.898 vs 0.899) on a shared clean test set, and loses head-to-head by -1.87 pts/deal. More distinct situations beat more precision per situation.',
+    },
+  ]}
+/>
+
+Held-out error (30.1 points) against the training-answer noise floor (28.2
+points) puts the model's own error against the true answer at about 10.5
+points: it has extracted essentially everything its training data
+contains. **Bidding is closed at this representation** — the strongest
+part of the project, and the last part to be looked at.
+
+Full writeup, including the input table and a chart of the training
+answers around the take/pass boundary, lives in
+[`docs/bidding-net.md`](https://github.com/tpemeja/belote-ai/blob/main/docs/bidding-net.md)
+(designed twin published
+[here](https://claude.ai/code/artifact/31b43a0d-cd67-4f4d-911f-6e2f31e28718)).
+
 </PhaseCarousel>
 
 ## Tech stack
@@ -964,14 +1203,15 @@ before it could be mistaken for real progress.
 
 ## Future improvements
 
-The immediate open problem is the learned value network (Guided rollout &
-learned value function phase above), which is still losing decisively to
-RandomISMCTS and shows two tangled issues: likely distribution shift between
-the self-play data it was trained on and the positions it's evaluated on, and
-clear overfitting (test loss plateaus around epoch 35 while training
-continues to 200 with no early stopping). Isolating those two independently
-is the next step, before deciding whether the value function is a viable
-replacement for ISMCTS's rollouts at all. Longer term, the goal is to
+The value network question from the "Guided rollout & learned value
+function" phase is resolved: the failure was mostly a leaking split and a
+loss fitting the wrong statistic, not a structural limit on value
+functions in this game. Bidding, once given its own purpose-built network,
+is now closed at its current representation, every measured way of
+improving it came back flat. The project's open question is the other side
+of that same result: card play, and whether the search- and rule-based
+results measured earlier still hold once bidding stops being a
+confounding variable sitting underneath them. Longer term, the goal is to
 upstream `python_belote` into `google-deepmind/open_spiel` so the project no
 longer depends on a personal fork for its core game implementation.
 
