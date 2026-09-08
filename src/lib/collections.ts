@@ -15,6 +15,13 @@ export async function getPublishedJournalEntries(): Promise<CollectionEntry<'jou
   return entries.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 }
 
+export async function getJournalEntriesForProject(
+  projectSlug: string
+): Promise<CollectionEntry<'journal'>[]> {
+  const entries = await getPublishedJournalEntries();
+  return entries.filter((entry) => entry.data.relatedProjectSlug?.id === projectSlug);
+}
+
 export async function getJournalEntriesForPhase(
   projectSlug: string,
   phaseId: string

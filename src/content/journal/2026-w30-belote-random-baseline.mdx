@@ -15,7 +15,7 @@ Before writing any competitive agent, I got `BeloteGame`/`BeloteState` far
 enough along in the OpenSpiel fork to deal cards, enforce bidding, and play
 out legal tricks to a scored terminal state. With that in place, I wrote the
 first version of the match evaluator and ran uniform-random players against
-each other over a batch of seeded deals — no strategy at all, just legal
+each other over a batch of seeded deals, with no strategy at all, just legal
 random actions on both sides.
 
 ## Challenges encountered
@@ -25,7 +25,7 @@ cheapest possible check that the harness itself isn't lying: with no skill
 difference between the two sides, the reported points margin should be
 statistically indistinguishable from zero. Getting the paired-seed dealing
 right (both sides seeing the same deals so variance from the deck doesn't
-swamp the signal) took a couple of passes — an early version reused a single
+swamp the signal) took a couple of passes. An early version reused a single
 RNG stream across both players' decisions, which very subtly biased whoever
 acted first on tie-breaks.
 
@@ -33,7 +33,7 @@ acted first on tie-breaks.
 
 A measurement tool that hasn't been shown to report "no difference" when
 there genuinely is no difference can't be trusted to report a real
-difference later. Random-vs-random isn't a throwaway smoke test — it's the
+difference later. Random-vs-random isn't a throwaway smoke test; it's the
 zero-baseline the whole evaluation harness gets calibrated against before any
 agent claim is allowed to rest on it.
 

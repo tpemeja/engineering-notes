@@ -5,27 +5,24 @@ import Prose from '../components/content/Prose.astro';
 import StatusBadge from '../components/ui/StatusBadge.astro';
 import TagList from '../components/content/TagList.astro';
 import RelatedContent from '../components/content/RelatedContent.astro';
-import PhaseStepper from '../components/content/PhaseStepper.astro';
 import { formatDate } from '../lib/dates';
 import { getEntries } from 'astro:content';
-
-interface Heading {
-  depth: number;
-  slug: string;
-  text: string;
-}
+import { getJournalEntriesForProject } from '../lib/collections';
+import { getPhaseStats } from '../lib/phases';
 
 interface Props {
   project: CollectionEntry<'projects'>;
-  headings: Heading[];
 }
 
-const { project, headings } = Astro.props;
-const { title, description, status, startDate, endDate, technologies, githubUrl, progress, phases } = project.data;
+const { project } = Astro.props;
+const { title, description, status, startDate, endDate, technologies, githubUrl } = project.data;
+
+const phaseStats = getPhaseStats(project);
 
 const relatedNotes = project.data.relatedNotesSlugs.length
   ? await getEntries(project.data.relatedNotesSlugs)
   : [];
+const relatedJournal = await getJournalEntriesForProject(project.id);
 ---
 
 <BaseLayout title={title} description={description} ogImagePath={`/open-graph/projects/${project.id}.png`} type="article">
@@ -50,10 +47,10 @@ const relatedNotes = project.data.relatedNotesSlugs.length
           )
         }
         {
-          typeof progress === 'number' && (
+          phaseStats.total > 0 && (
             <div>
-              <dt>Progress</dt>
-              <dd>{progress}%</dd>
+              <dt>Phases</dt>
+              <dd>{phaseStats.done} of {phaseStats.total} done</dd>
             </div>
           )
         }
@@ -69,13 +66,11 @@ const relatedNotes = project.data.relatedNotesSlugs.length
       <TagList tags={technologies} size="md" />
     </header>
 
-    <PhaseStepper phases={phases} headings={headings} />
-
     <Prose>
       <slot />
     </Prose>
 
-    <RelatedContent title="Related" notes={relatedNotes} />
+    <RelatedContent title="Related" notes={relatedNotes} journal={relatedJournal} />
   </article>
 </BaseLayout>
 

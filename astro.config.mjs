@@ -17,6 +17,10 @@ export default defineConfig({
     processor: unified({
       remarkPlugins: [remarkHeadingId],
     }),
+    // Dual themes emit --shiki-dark vars; global.css swaps them under html.dark.
+    shikiConfig: {
+      themes: { light: 'github-light', dark: 'github-dark' },
+    },
   },
 
   integrations: [mdx(), sitemap()],

@@ -1,0 +1,110 @@
+---
+// Wraps a stack of <Phase> rows. The collapsed rows are the ledger: the whole
+// arc of the project is scannable without expanding anything.
+---
+
+<section class="phase-ledger not-prose">
+  <div class="phase-ledger-header">
+    <p class="phase-ledger-count" data-count aria-live="polite"></p>
+    <button type="button" class="phase-ledger-toggle" data-expand-all hidden>Expand all</button>
+  </div>
+  <div class="phase-ledger-rows" data-rows>
+    <slot />
+  </div>
+</section>
+
+<style>
+  .phase-ledger {
+    margin-block: 1.5rem 2rem;
+  }
+
+  .phase-ledger-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    min-height: 1.5rem;
+    padding-block-end: 0.6rem;
+    border-block-end: 1px solid var(--color-border);
+  }
+
+  .phase-ledger-count {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-fg-muted);
+  }
+
+  .phase-ledger-toggle {
+    border: 1px solid var(--color-border);
+    border-radius: 0.25rem;
+    background-color: var(--color-bg);
+    color: var(--color-fg-muted);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 0.25rem 0.55rem;
+    cursor: pointer;
+  }
+
+  .phase-ledger-toggle:hover {
+    color: var(--color-accent);
+    border-color: var(--color-accent);
+  }
+
+  /* The rows carry their own separators; keep prose spacing out of the stack. */
+  .phase-ledger-rows > :global(details) {
+    margin: 0;
+  }
+</style>
+
+<script>
+  document.querySelectorAll<HTMLElement>('.phase-ledger').forEach((ledger) => {
+    const phases = [...ledger.querySelectorAll<HTMLDetailsElement>('[data-rows] > details')];
+    if (phases.length === 0) return;
+
+    const countEl = ledger.querySelector<HTMLElement>('[data-count]');
+    const toggle = ledger.querySelector<HTMLButtonElement>('[data-expand-all]');
+
+    if (countEl) {
+      const done = phases.filter((phase) => phase.dataset.status === 'done').length;
+      countEl.textContent = `${done} of ${phases.length} done`;
+    }
+
+    const syncToggle = () => {
+      if (!toggle) return;
+      const allOpen = phases.every((phase) => phase.open);
+      toggle.textContent = allOpen ? 'Collapse all' : 'Expand all';
+    };
+
+    if (toggle) {
+      toggle.hidden = false;
+      toggle.addEventListener('click', () => {
+        const expand = !phases.every((phase) => phase.open);
+        phases.forEach((phase) => {
+          phase.open = expand;
+        });
+        syncToggle();
+      });
+      phases.forEach((phase) => phase.addEventListener('toggle', syncToggle));
+    }
+
+    // A deep link (/projects/foo#ismcts) has to open the phase it points at,
+    // otherwise the target is collapsed and the jump lands on nothing.
+    const openFromHash = () => {
+      const id = decodeURIComponent(location.hash.slice(1));
+      if (!id) return;
+      const target = phases.find((phase) => phase.id === id);
+      if (!target) return;
+      target.open = true;
+      syncToggle();
+      target.scrollIntoView({ block: 'start' });
+    };
+
+    openFromHash();
+    window.addEventListener('hashchange', openFromHash);
+  });
+</script>
