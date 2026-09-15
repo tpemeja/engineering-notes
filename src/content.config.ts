@@ -35,6 +35,16 @@ const projects = defineCollection({
         )
         .default([]),
       githubUrl: z.url().optional(),
+      highlights: z
+        .array(
+          z.object({
+            headline: z.string().max(28),
+            detail: z.string().max(140),
+            href: z.string().optional(),
+          })
+        )
+        .max(4)
+        .default([]),
       phases: z
         .array(
           z.object({

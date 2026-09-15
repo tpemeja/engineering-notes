@@ -1,1186 +1,475 @@
 ---
 title: 'Belote AI'
-description: 'Game AI project: implementing Belote as an OpenSpiel game and building search- and learning-based agents to play it well.'
-status: active
+description: 'Game-playing agents for Belote on OpenSpiel, built as a ladder of measured rungs: hand-built rules, Monte Carlo search, networks that replace the search, and a language model at the table.'
+status: paused
 startDate: 2026-07-24
 technologies:
   [
     'Python',
     'OpenSpiel',
     'PyTorch',
-    'ISMCTS',
+    'LangGraph',
+    'Ollama',
   ]
 technologyNotes:
   - name: 'Python'
-    context: 'Language for the game engine and evaluation harness.'
+    context: 'The agents, the training, the measurement layer and both front ends.'
   - name: 'OpenSpiel'
-    context: 'Game-engine framework Belote is implemented as a game inside
-      of, instead of a bespoke engine.'
+    context: "Belote is python_belote in a fork of OpenSpiel, with a C++ twin verified identical over 40 seeded deals. The game's resampler is what every search agent stands on."
   - name: 'PyTorch'
-    context: 'Backs the learned value network used in the Guided rollout
-      phase.'
-  - name: 'ISMCTS'
-    context: "OpenSpiel's information-set MCTS algorithm, used to build
-      search-based agents."
-  - name: 'OpenSkill'
-    context: 'Powers round-robin skill ratings across agents.'
+    context: 'PlayNet (145 → 256 → 128 → 1) and BidNet (81 → 128 → 64 → 1), trained on Monte Carlo labels with train/validation splits grouped by deal.'
+  - name: 'LangGraph'
+    context: 'The four-step pipeline (facts computed in code, then infer, evaluate, choose) that tests whether decomposing a decision helps the language model.'
+  - name: 'Ollama'
+    context: 'Serves gemma4:12b locally for the language-model rungs; the MLX build runs 1.6x faster than GGUF for the same weights.'
+  - name: 'pytest'
+    context: "Statistics, the game-contract checks and the front ends, alongside the fork's own 42 rule tests."
+  - name: 'uv'
+    context: 'Dependency management, with the OpenSpiel fork installed as an editable path dependency.'
 githubUrl: 'https://github.com/tpemeja/belote-ai'
-phases:
-  - id: 'game-implementation'
-    status: 'done'
-    summary: 'Create in OpenSpiel a correct, seedable Belote engine.'
-  - id: 'simulation-harness'
-    status: 'done'
-    summary: 'Random-vs-random walking skeleton proving the harness itself:
-      dealer-mirrored matches, paired win/tie/loss stats, and a pilot-then-size
-      sample-size calculation instead of a guessed deal count. Result: -1.15
-      pts/deal, 95% CI [-4.47, +2.17] over 1,393 paired deals, statistically
-      indistinguishable from zero, as it should be for two identical bots.'
-  - id: 'rulevalidbot'
-    status: 'done'
-    summary: 'Fixed bidding/play heuristics as the first real agent, beating
-      the random baseline by +15.93 pts/deal, 95% CI [+12.19, +19.67], on
-      1,250 deals sized by the walking skeleton pilot-then-size procedure.
-      A take-threshold sweep then showed a stricter bidder does even better
-      against random, up to a point.'
-  - id: 'card-play-strategy'
-    status: 'done'
-    summary: 'A partner-aware, win-cheaply-or-discard-low card-play strategy,
-      beating the highest-value baseline by +50.75 pts/deal, 95% CI [+47.37,
-      +54.13]. A 5-agent OpenSkill tournament confirmed a bidding threshold
-      tuned against random does not automatically transfer to a different
-      opponent.'
-  - id: 'ismcts'
-    status: 'done'
-    summary: "OpenSpiel's information-set MCTS, with a from-scratch
-      resampler to keep sampled worlds consistent with what's actually been
-      seen so far. Against the actual tournament champion,
-      lead_conserve_trump, it's a decisive -17.35 pts/deal loss. A follow-up
-      sweep of the simulation budget (10 to 400) never closes that gap,
-      pointing at evaluator quality rather than search budget as the real
-      bottleneck."
-  - id: 'guided-rollout-value-function'
-    status: 'done'
-    summary: 'A heuristic rollout evaluator swap for ISMCTS default random
-      rollouts, using the actual tournament champion, lead_conserve_trump,
-      to drive it. The most promising result in the project so far, +3.43
-      pts/deal, a hair from significance, though adding diversity back on
-      top of it made things worse. The learned value network itself never
-      recovered, but a follow-up diagnosis found its failure was mostly a
-      leaking train/val split plus a loss fitting the wrong statistic:
-      fixing both took overall R² from +0.103 to +0.376, yet bid states
-      stayed near zero even fixed, pointing straight at the need for a
-      purpose-built bidding network instead.'
-  - id: 'bidding-net'
-    status: 'done'
-    summary: "A purpose-built network for the take-or-pass decision,
-      trained on Monte-Carlo-averaged labels instead of single noisy
-      deals. Beats the project's long-standing champion by +28.00
-      pts/deal, 95% CI [+24.36, +31.64]. Five separate ways of improving
-      it (more deals, a bigger network, training longer, self-play
-      iteration, more precise labels) were each measured and came back
-      flat, closing bidding as a line of work at this representation."
+highlights:
+  - headline: '+38.7 pts/deal'
+    detail: 'Monte Carlo policy improvement over the best hand-written rule, the largest gain on the ladder.'
+  - headline: '148x faster'
+    detail: 'A search-free network agent that ties Monte Carlo search over a 6,000-deal match.'
+  - headline: 'Fix merged upstream'
+    detail: "Found and fixed a seeding bug in OpenSpiel's Python ISMCTS."
+    href: 'https://github.com/google-deepmind/open_spiel/pull/1584'
+  - headline: 'Every claim measured'
+    detail: 'Paired, dealer-swapped matches with confidence intervals, sized in advance to detect 5 points a deal.'
 relatedNotesSlugs: []
 order: 10
-progress: 60
 ---
 
 import Callout from '../../components/content/Callout.astro';
-import PhaseJournal from '../../components/content/PhaseJournal.astro';
-import PhaseCarousel from '../../components/content/PhaseCarousel.astro';
+import PhaseLedger from '../../components/content/PhaseLedger.astro';
+import Phase from '../../components/content/Phase.astro';
 import TechStack from '../../components/content/TechStack.astro';
-import ObjectDiagram from '../../components/content/ObjectDiagram.astro';
-import NetworkDiagram from '../../components/content/NetworkDiagram.astro';
+import Screenshot from '../../components/content/Screenshot.astro';
 import DecisionTable from '../../components/content/DecisionTable.astro';
-import ConfidenceIntervalChart from '../../components/content/ConfidenceIntervalChart.astro';
 import BranchDiagram from '../../components/content/BranchDiagram.astro';
-import WinTieLossBar from '../../components/content/WinTieLossBar.astro';
-import PercentBars from '../../components/content/PercentBars.astro';
-import SweepChart from '../../components/content/SweepChart.astro';
-import {
-  sweepMarginSeries,
-  sweepWinRateSeries,
-  sweepBreakdownSeries,
-} from '../../data/belote-rulevalidbot-sweep.ts';
+import NetworkDiagram from '../../components/content/NetworkDiagram.astro';
+import ConfidenceIntervalChart from '../../components/content/ConfidenceIntervalChart.astro';
 
 ## Overview
 
-The French trick-taking card game Belote is implemented as
-a proper [OpenSpiel](https://github.com/google-deepmind/open_spiel) game
-(chance-based dealing, imperfect information enforced by the framework, a
-flat action space covering bidding and card play). 
+<Screenshot
+  src="/images/projects/belote-ai/live.webp"
+  alt="Browser front end mid-deal: the current trick, the player's six-card hand, and the agent's evaluation of each legal card as a bar chart, with J of hearts best at +32.2 points per deal"
+  caption="Playing the strongest agent in a browser. Before you choose, the Monte Carlo agent shows what each of your legal cards is worth, in points per deal."
+/>
 
-Every agent built on top of it, from uniform random up to a PyTorch value
-network, gets compared against the others through a seeded,
-confidence-interval-backed evaluation harness, not a handful of "it felt
-stronger" test games.
+Game-playing agents for Belote, a four-player French trick-taking card game,
+built on [OpenSpiel](https://github.com/google-deepmind/open_spiel). The
+project is a ladder: each rung asks one question, answers it with a measured
+comparison, and hands the result to the next, from fixed rules through Monte
+Carlo search to neural networks and a local language model.
 
-A longer-term goal is bringing LLMs into that same comparison, not just to see
-how they rank against other agents, but whether they can actually pull off Belote's 
-tactical plays, like an *appel* (calling for a suit via a discard signal) or an 
-*impasse* (a betting on where a specific card sits).
+The strongest card play contains no network. One step of Monte Carlo policy
+improvement over a hand-written rule is the largest gain on the ladder, and
+the networks buy speed rather than strength: a search-free agent ties that
+search at 148x the speed. Building the game's resampler also surfaced a
+seeding bug in OpenSpiel's own ISMCTS, fixed upstream in
+[open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584).
 
 ## Problem
 
-Belote didn't exist as an OpenSpiel game. But the harder problem was
-proving that any new agent built for it was actually better than the
-last one:
+- **Belote is not an OpenSpiel game.** There is no engine to build agents on,
+  and "Belote" is many rule sets: this is classic *à la retourne*, with a
+  take-or-pass auction, not Coinchée or Contrée.
+- **One deal swings by roughly ±162 points, and not like a bell curve.** The
+  all-or-nothing contract piles margins up at the extremes: one dealer
+  orientation alone has a standard deviation of 123 points a deal, so "I won
+  fifty deals" carries almost no information.
+- **The hands are hidden.** A search agent has to reason over worlds
+  consistent with what its seat actually knows, never over the real deal.
+- **Bidding and card play confound each other.** A margin between two agents
+  that differ in both halves can be attributed to neither, and a search agent
+  that searches every action silently bids by search too.
+- **A language model is too slow for a match.** At 7.7 to 16.7 seconds a
+  decision, the thousands of deals a 5-point comparison needs are out of
+  reach.
 
-- **No existing implementation.** Belote has no OpenSpiel game to build or
-  benchmark agents against in the first place.
-- **Evaluation noise compounds with imperfect information.** Small-sample
-  results can look like real improvements until the sample size grows, and
-  Belote's chance-based dealing and hidden hands push variance up further.
-  So a *trustworthy* comparison needs enough seeded deals to be genuinely
-  expensive to run.
-- **Win rate alone won't reveal *how* an LLM plays.** Comparing an LLM against
-  the other agents isn't just about who wins, it's whether the LLM can
-  execute known tactical plays like an *appel* or an *impasse* at all, which
-  an aggregate points margin can't show. That needs per-decision scoring
-  against known-good tactical baselines, and LLM calls are too slow and
-  expensive to lean on thousands of simulated deals per comparison the way
-  ISMCTS or a value network can.
+## Approach
 
-Any one of these is manageable alone, but together they mean win rate over a 
-batch of games isn't enough. It needs a real implementation to run games on, 
-enough seeded samples to separate skill from noise, and a way to score 
-individual decisions for agents (such as an LLM) or human players, 
-who can't realistically be evaluated over thousands of deals. 
-That's why the evaluation harness became the first deliverable rather than 
-an afterthought bolted on once agents existed.
+Every claim of the form *A beats B* is a paired match: each deal is played
+twice with the dealer swapped, the margin carries a 95% confidence interval,
+and the deal count is solved in advance to detect 5 points a deal at 80%
+power. An interval containing zero is reported as a tie, which is a bound
+(smaller than about five points), not a claim of equality. A comparison meant
+to isolate card play pins bidding, and a guard verifies it rather than
+trusting the configuration.
 
-## Phases
+Three instruments carry that rule to players of very different cost:
+**matches** for whole agents, **decision grading** for a player too slow to
+play hundreds of deals, and a **judge** that screens a card-play change too
+small for a match, as a paired difference at the same stored positions. Every
+rung writes its configuration, rows and findings to `results/ladder/`, so
+each number on this page traces to a record in the repo.
 
-Six phases so far, from a uniform-random baseline to a learned value network:
+## What I built
 
-<PhaseCarousel phases={frontmatter.phases}>
+The agents the ladder converged on:
 
-### Game Implementation |#game-implementation|
+| Agent | Role | Result | Cost |
+|---|---|---|---|
+| `BidNet` + Monte Carlo | Strongest agent | +5.50 over Monte Carlo with rule bidding | ~120 ms/deal |
+| `BidNet` + `PlayNet` | Fastest strong agent | Level with Monte Carlo, -0.63 [-2.06, +0.81] | ~0.9 ms/deal |
+| Monte Carlo, 32 worlds | Strongest card play | +38.68 over the best rule, `win_or_dump` | ~120 ms/deal |
+| `BidNet` | Bidding | +5.59 over the best rule, `hand_strength` 62+ | |
 
-Belote is not part of the supported games in `OpenSpiel`. So the first part of the project is to
-fork OpenSpiel and add a Belote implementation to it, well-tested, optimized, and documented
-enough to eventually open a pull request back upstream. As I am more confident in Python, I
-start there, planning to convert it to C++ later.
+<PhaseLedger>
 
----
+<Phase
+  id="game-implementation"
+  title="The game"
+  status="done"
+  goal="Implement Belote as an OpenSpiel game whose rules, scoring and resampling behave exactly as the agents built on it assume."
+  outcome="Belote as an OpenSpiel game, its scoring and resampler checked against the public API."
+>
 
-To implement the game in `OpenSpiel`, two objects need to be defined: 
-- `Game`, which is relatively simple and only contains the parameters of the game.
-- `State`, which contains all the game logic, including how the game is organized, the rules, and the scoring.
-
-<ObjectDiagram
-  arrowLabel="constructs"
-  nodes={[
-    {
-      name: 'Game',
-      fields: [
-        { name: 'dealer', detail: 'ID of the player who deals' },
-        { name: 'max_redeals', detail: 'cap on redeals if everyone passes' },
-      ],
-    },
-    {
-      name: 'State',
-      fields: [
-        {
-          name: 'game logic',
-          detail: 'bidding rounds, redeals, turn order, trick resolution',
-        },
-        { name: 'rules', detail: 'official FFBelote rules, incl. Belote/Rebelote' },
-        {
-          name: 'scoring',
-          detail: 'capots, dedans, belote bonus, centered at 0 for RL',
-        },
-        {
-          name: 'resampler',
-          detail:
-            "clones opponent hands, resampled but consistent with what's been observed",
-        },
-      ],
-    },
-  ]}
-/>
-
----
-
-Rules and dealing follow the [official FFBelote rules](https://www.ffbelote.org/wp-content/uploads/2016/01/regles-officielles-de-la-Belote-27-01-2016.pdf). OpenSpiel already supports non-deterministic games via chance nodes/players, and here that node is only in charge of dealing the cards.
-A few things still needed a deliberate call:
+`python_belote` lives in a fork of OpenSpiel: chance nodes deal the cards,
+the framework enforces imperfect information, and one flat action space of
+38 actions covers the auction and card play. The fork carries 42 rule tests;
+the ladder's own first rung checks the contract with the agents instead:
+returns zero-sum over 200 deals, trick points exactly 162 or 252, and
+resampled worlds that keep the actor's hand, never resurrect a played card
+and respect every inferred void.
 
 <DecisionTable
   decisions={[
     {
-      label: 'Game scope',
-      chose: 'Single deal',
-      insteadOf: 'Full game to a target score (e.g. 501)',
-      why: "Lower variance and simpler confidence intervals at the cost of not directly measuring game-winning strategy (e.g. playing conservatively while ahead).",
+      label: 'Unit of play',
+      chose: 'One deal is one game, returning the signed point margin',
+      insteadOf: 'A race to 501 or 1000 across deals',
+      why: 'Every result becomes a mean of independent per-deal margins, and the game is zero-sum by construction.',
     },
     {
-      label: 'Rule fidelity',
-      chose: 'Official rules, incl. auto-declared Belote/Rebelote',
-      insteadOf: 'Relying on player declarations',
-      why: 'Simplicity: the engine declares it for the player instead of trusting a signal.',
+      label: 'Declarations',
+      chose: 'Belote-rebelote only, granted automatically',
+      insteadOf: 'Announcement actions, plus tierce, cinquante, cent and carré',
+      why: 'Keeps the deck worth a fixed 162 (252 on a capot), which every confidence interval depends on, without adding a bluffing action.',
     },
     {
-      label: 'RL scoring',
-      chose: 'score = own_team_points − opponent_team_points',
-      insteadOf: 'Raw official point totals (capots, dedans, belote bonus)',
-      why: 'Centered-at-0 score matches the convention used by other OpenSpiel games like Bridge. Official points are still used for the game score itself.',
+      label: 'Dealer',
+      chose: 'A game parameter that rotates on each redeal',
+      insteadOf: 'A fixed first seat',
+      why: 'It is what makes dealer-swapped paired matches possible, the most important measurement device in the project.',
     },
   ]}
 />
 
----
+<Callout variant="lesson" title="True is not the same as learnable">
+  With no announcement action, the engine records who holds belote before a
+  card is played. That is bookkeeping, not public information: anything shown
+  to a player reads `belote_announced` instead, and the rung checks the gap
+  is real in all 14 deals that had a holder.
+</Callout>
 
-The last important point for this section is how `resample_from_infostate` is defined, and its purpose: returning a clone of the other players' hands, resampled but kept consistent with the asking player's information state.
-For a perfect-information game this is easy, since it's the same state, but for an imperfect-information game like Belote it's more complicated. Resampling started out naive and was extended once it under-used what a player could actually infer:
+</Phase>
 
-<ObjectDiagram
-  arrowLabel="+ observed signals"
-  nodes={[
-    {
-      name: 'Naive resample',
-      fields: [
-        {
-          name: 'unplayed cards',
-          detail: 'resampled uniformly at random among the other players',
-        },
-      ],
-    },
-    {
-      name: 'Informed resample',
-      fields: [
-        {
-          name: 'max trump card',
-          detail: "inferred: a player who didn't over-trump holds no higher trump",
-        },
-        { name: 'voids', detail: 'suits a player is known not to hold' },
-        {
-          name: '2nd belote card',
-          detail: 'known once Belote/Rebelote has been announced',
-        },
-      ],
-    },
-  ]}
-/>
+<Phase
+  id="simulation-harness"
+  title="Measurement"
+  status="done"
+  goal="Build the instrument before any agent worth pointing it at, and prove it on cases where the right answer is known."
+  outcome="Pairing removes 28% more noise than averaging, and a true null reads as a tie."
+>
 
----
-
-The game has been fully implemented in Python and tests have been created. I opened an issue in the official GitHub repository to ask some details for the pull request ([Add game "Belote"
-#1577](https://github.com/google-deepmind/open_spiel/issues/1577)).
-Before creating the PR, I will need to work on the C++ implementation for compute optimization. It will be a good opportunity to review C++ and compare the difference in performance.
-
-### Simulation Harness |#simulation-harness|
-
-<PhaseJournal projectSlug="belote-ai" phaseId="simulation-harness" />
-
-Before writing any real agent, the harness itself needed proving: two
-`pyspiel` uniform-random bots played against each other over seeded deals,
-with the statistical machinery every later comparison depends on (paired
-matches, confidence intervals, sample sizing) built and validated here
-first instead of reinvented per phase.
-
----
-
-A fixed dealer gives one team a permanent bidding-order advantage that would
-otherwise be indistinguishable from a real skill difference. The fix borrows
-duplicate bridge's trick: play the identical seed twice, dealer rotated one
-seat, and average the two margins.
+Who deals decides who bids first, which is worth real points, so an unpaired
+comparison partly measures seat luck. The fix borrows duplicate bridge's
+trick:
 
 <BranchDiagram
   source={{
-    name: 'Seed 42',
-    detail: 'Same chance seed, so the identical cards get dealt both times.',
+    name: 'One seeded shuffle',
+    detail: 'the identical cards are dealt both times',
   }}
-  branchLabel="play the same deal twice, dealer rotated one seat"
+  branchLabel="play it twice, dealer rotated one seat"
   branches={[
-    { name: 'dealer = 0', detail: "Team 0 bids and plays first, this deal's normal margin." },
-    { name: 'dealer = 1', detail: "Same deal, seats rotated one position: Team 1 bids and plays first instead, this deal's mirror margin." },
+    { name: 'Dealer at seat 0', detail: "one team bids first: this orientation's margin" },
+    { name: 'Dealer at seat 1', detail: 'the other team bids first: the mirror margin' },
   ]}
   mergeLabel="average the two margins"
   merge={{
     name: 'Paired margin',
-    detail: '(normal + mirror) / 2, seat-order bias cancels out.',
+    detail: 'seat-order advantage cancels out',
   }}
 />
 
-<DecisionTable
-  decisions={[
-    {
-      label: 'Match design',
-      chose: 'Dealer-mirrored (paired) deals',
-      insteadOf: 'A single fixed-dealer match',
-      why: "Cancels the seat-order bias and roughly halves the margin's stdev on the same underlying deals, verified empirically, not just argued for.",
-    },
-    {
-      label: 'Tie handling',
-      chose: 'Report ties as their own bucket',
-      insteadOf: 'Folding them into the win-rate denominator',
-      why: 'An exact-zero paired margin means neither team came out ahead, a real outcome (~15% of deals here), not a rounding artifact to discard.',
-    },
-    {
-      label: 'Sample size',
-      chose: 'Pilot batch, then solve for N via a power calculation',
-      insteadOf: 'A guessed deal count',
-      why: 'A 300-deal pilot estimates variance, then a standard power formula solves for the N needed to detect a chosen minimum effect at a target confidence, checked against the achieved CI at the end.',
-    },
-  ]}
-/>
+The rung measures the instrument with bots too simple to have opinions:
 
-For this random-vs-random run, the 300-deal pilot measured a paired stdev
-of ~66.6 points/deal, which the power formula turned into a target of 1,393
-paired deals (to detect a ±5 pt/deal effect at 80% power, 95% confidence).
-Running that many gave a paired margin of **-1.15 pts/deal, 95% CI
-[-4.47, +2.17]**, straddling zero, the result the harness needed to
-produce before being trusted on anything else. Holding that same mean and
-stdev fixed and only varying N shows why fewer deals wouldn't have said so
-with any confidence, and why going far beyond 1,393 buys little more:
-
-<ConfidenceIntervalChart
-  unit="pts/deal"
-  metrics={[
-    { label: 'N=50', mean: -1.15, ciLower: -18.66, ciUpper: 16.36 },
-    { label: 'N=300 (pilot alone)', mean: -1.15, ciLower: -8.30, ciUpper: 6.00 },
-    { label: 'N=1,393 (actual, sized)', mean: -1.15, ciLower: -4.47, ciUpper: 2.17, highlight: true },
-    { label: 'N=5,000', mean: -1.15, ciLower: -2.90, ciUpper: 0.60 },
-    { label: 'N=50,000', mean: -1.15, ciLower: -1.70, ciUpper: -0.60 },
-  ]}
-/>
-
-Half-width shrinks with `1/sqrt(N)`, not linearly: 6x the deals (50→300)
-only tightens it ~2.4x, and 36x more (1,393→50,000) tightens it just ~6x
-further, the diminishing return the power calculation above is built
-around. (Mean held fixed here purely to isolate N's effect. A real rerun
-at a different N would land on a different mean too.)
-
-<ConfidenceIntervalChart
-  unit="pts/deal"
-  metrics={[
-    { label: 'Dealer 0 only', mean: 13.58, ciLower: 7.07, ciUpper: 20.08 },
-    { label: 'Dealer 1 only', mean: -15.87, ciLower: -22.44, ciUpper: -9.31 },
-    {
-      label: 'Paired (seat-order cancelled)',
-      mean: -1.15,
-      ciLower: -4.47,
-      ciUpper: 2.17,
-      highlight: true,
-    },
-  ]}
-/>
-
-The two single-dealer arms each look "significant" on their own (95% CIs
-excluding zero), but in opposite directions and of similar size, exactly
-the seat-order artifact the pairing exists to cancel, not a real skill gap
-between identical bots. Only the paired arm (highlighted) straddles zero,
-which is the correct answer.
-
-<WinTieLossBar
-  team0Label="Team 0 (Random)"
-  team1Label="Team 1 (Random)"
-  rows={[
-    { label: 'Dealer 0 only', team0: 0.477, tie: 0.0, team1: 0.523 },
-    { label: 'Dealer 1 only', team0: 0.518, tie: 0.0, team1: 0.482 },
-    {
-      label: 'Paired (seat-order cancelled)',
-      team0: 0.404,
-      tie: 0.153,
-      team1: 0.443,
-      highlight: true,
-    },
-  ]}
-/>
-
-Both single-dealer rows show 0% ties because one deal can never land on an
-exact 0 margin. A made contract splits the points as actually won (say 90
-vs 72). A failed one sweeps everything to the defenders instead. Either way
-it's never perfectly even, since an 81-81 result is scored as a failed
-contract rather than a tie.
-
-The paired row's 15.3% is a different kind of tie: not one deal ending
-even, but two mirrored deals landing on equal and opposite margins (Team 0
-wins by X with dealer=0, Team 1 wins by that same X with dealer=1), which
-average out to exactly 0. It's reported as its own outcome rather than
-folded into the win-rate denominator, since it genuinely means neither team
-had a net edge across both plays.
-
----
-
-<Callout variant="lesson" title="A measurement tool has to prove it reports zero first">
-  Two identical uniform-random bots should show a paired margin
-  statistically indistinguishable from zero. That's not a throwaway smoke
-  test, it's the calibration check the whole evaluation harness has to pass
-  before any later "this agent is stronger" claim is allowed to rest on it.
-</Callout>
-
-### RuleValidBot |#rulevalidbot|
-
-<PhaseJournal projectSlug="belote-ai" phaseId="rulevalidbot" />
-
-The first real agent, deliberately minimal: the goal was reliably beating
-the random baseline with a tight confidence interval, not playing well.
-
-<ObjectDiagram
-  nodes={[
-    {
-      name: 'RuleValidBot',
-      fields: [
-        {
-          name: 'bid1 / bid2',
-          detail: "take, or name the strongest suit, if the hand's trump-adjusted points are >= 31, otherwise pass",
-        },
-        { name: 'play', detail: 'play the highest point-value legal card' },
-      ],
-    },
-  ]}
-/>
-
-Against uniform random, N sized by the same pilot-then-size procedure the
-walking skeleton built (a 300-deal pilot measured stdev, which solved for
-N=1,250 paired deals to detect a ±5 pt/deal effect at 80% power):
-
-<WinTieLossBar
-  team0Label="RuleValidBot"
-  team1Label="Random"
-  rows={[{ label: 'RuleValidBot vs Random', team0: 0.571, tie: 0.067, team1: 0.362, highlight: true }]}
-/>
-
-<ConfidenceIntervalChart
-  unit="pts/deal"
-  metrics={[{ label: 'RuleValidBot vs Random', mean: 15.93, ciLower: 12.19, ciUpper: 19.67, highlight: true }]}
-/>
-
-Raw win rate and mean margin can disagree without contradicting each other.
-Belote's all-or-nothing contract makes a loss a fixed, capped swing (fail
-the contract and the other team sweeps 162), while a win's size is
-uncapped, so a policy whose wins are bigger than its losses can win on
-average while still losing more individual deals than it wins.
-
-<Callout variant="info">
-  Not charted above since only the paired result is shown, but the
-  dealer=0-only arm behind this same result is exactly that case:
-  RuleValidBot loses that raw count 45.1% to 54.9%, yet still averages
-  +21.48 pts/deal on it.
-</Callout>
-
-Splitting *how often* a team gets to declare from *how well it does when it
-does* told a more precise story than the headline number alone:
-
-<PercentBars
-  title="Declare frequency"
-  bars={[
-    { label: 'RuleValidBot declares', value: 0.303 },
-    { label: 'Random declares', value: 0.697, highlight: true },
-  ]}
-/>
-<PercentBars
-  title="Declare success rate"
-  bars={[
-    { label: 'RuleValidBot succeeds', value: 0.708, highlight: true },
-    { label: 'Random succeeds', value: 0.630 },
-  ]}
-/>
-
-Random gets to attempt a contract more than twice as often (its bidding is
-a blind coin flip that regularly preempts RuleValidBot before it even gets
-a turn), yet still succeeds less often when it does. Raw win rate would
-have conflated those two effects. Reporting them separately keeps the real
-skill signal (70.8% vs 63.0% success) from hiding behind the opportunity
-imbalance (30.3% vs 69.7% frequency), and vice versa.
-
-That's not the same as showing "be more selective" is the right strategy,
-though. RuleValidBot has no way to know in advance whether a given hand
-will actually succeed, it only estimates via the trump-adjusted points
-heuristic, and being pickier mechanically raises the success rate just by
-filtering for stronger hands, at the cost of giving up most opportunities
-entirely. Whether a given threshold trades away too much frequency for
-that higher per-attempt rate is exactly what the sweep below tests.
-
-The `>= 31` take-threshold and "always play highest-value card" were both
-unexamined choices, so the natural next question was whether 31 was even a
-good number. A sweep from 30 to 80, evaluated against the same fixed random
-reference at each point (5,000 paired deals per threshold), answered that
-directly:
-
-<SweepChart
-  series={sweepMarginSeries}
-  xDomain={[29, 81]}
-  yDomain={[0, 35]}
-  xTicks={[30, 40, 50, 60, 70, 80]}
-  yTicks={[0, 5, 10, 15, 20, 25, 30, 35]}
-  xLabel="hand_points_threshold"
-  yLabel="Margin vs random (pts/deal)"
-  referenceLine={0}
-/>
-
-<SweepChart
-  series={sweepWinRateSeries}
-  xDomain={[29, 81]}
-  yDomain={[0.5, 0.72]}
-  xTicks={[30, 40, 50, 60, 70, 80]}
-  yTicks={[0.5, 0.55, 0.6, 0.65, 0.7]}
-  yTickFormat={(v) => `${Math.round(v * 100)}%`}
-  xLabel="hand_points_threshold"
-  yLabel="Paired win rate vs random"
-  referenceLine={0.5}
-/>
-
-Margin and win rate climb steeply from threshold 30 up to about 43, then
-plateau from there on. Threshold 58 is the nominal best on both
-metrics (+31.36 pts/deal, 69.9% win rate), but it isn't meaningfully
-distinguishable from most of the 40s and 50s, every point's CI in the
-plateau overlaps its neighbors. The real finding is "stop being reckless
-past ~43," not "58 is the answer."
-
-Splitting *how often* RuleValidBot declares from *how well it does when it
-declares vs. defends* explains *why* the plateau happens, not just that it
-does:
-
-<SweepChart
-  series={sweepBreakdownSeries}
-  xDomain={[29, 81]}
-  yDomain={[0, 1]}
-  xTicks={[30, 40, 50, 60, 70, 80]}
-  yTicks={[0, 0.2, 0.4, 0.6, 0.8, 1]}
-  yTickFormat={(v) => `${Math.round(v * 100)}%`}
-  xLabel="hand_points_threshold"
-  yLabel="Rate"
-  height={280}
-/>
-
-RuleValidBot's hand-points threshold has a real ceiling: a 5-card hand
-can't score above roughly 66, so past that it never declares at all, and
-its declare rate is already under 5% by the mid-40s. Its win rate *when it
-does declare* keeps climbing as the threshold rises, past 90% at the high
-end, though noisy there (the widening band) since only a handful of hands
-ever qualify. Its win rate *when defending*, on the other hand, barely
-moves: flat around 42% regardless of threshold, since that side depends
-only on how often Random's own blind bid fails, not on anything
-RuleValidBot decides.
-
-<Callout variant="lesson" title="A paired win rate isn't the same statistic as the per-deal rate behind it">
-  Past threshold ~67, RuleValidBot never declares, so every deal is decided
-  purely by whether Random's contract succeeds, and win rate when defending
-  sits at 42.2%. Naively, the overall paired win rate should land near
-  there too. It doesn't, it's 69.6%, confirmed directly by rerunning 3,000
-  deals at a threshold well past that ceiling and inspecting the raw
-  margins. Cause: Belote's
-  all-or-nothing contract makes wins and losses wildly asymmetric in size
-  (a rare failed-random-contract win averages +166.6, a common
-  successful-random-contract loss averages only -69.3), and averaging two
-  draws from a distribution shaped like that pushes the paired split well
-  past what the raw per-deal split alone would suggest. A paired win rate
-  and a per-deal win rate are genuinely different statistics, not two views
-  of the same number.
-</Callout>
-
-<Callout variant="lesson" title="A parameter tuned against one opponent doesn't automatically transfer">
-  The sweep holds everything fixed and evaluates each threshold against a
-  *fixed* reference (random), the same principle chess engines use for SPSA
-  tuning against a fixed reference engine, deliberately not another
-  RuleValidBot threshold, so the scale doesn't shift as candidates change.
-  That's the right way to find "better against random," but a threshold
-  climbing purely by capitalizing on random's careless contract failures
-  isn't necessarily better against a less careless opponent later.
-  Confirmed later, not just a hedge: the next phase's partner-aware
-  card-play strategy found exactly that, a threshold tuned against random
-  didn't automatically carry over once the opponent got smarter.
-</Callout>
-
-### Card-play Strategy |#card-play-strategy|
-
-<PhaseJournal projectSlug="belote-ai" phaseId="card-play-strategy" />
-
-RuleValidBot's card play was as naive as its bidding was deliberately
-minimal: always play the highest point-value legal card, regardless of
-whether the trick can even be won or who's already winning it. This phase
-replaces that with a partner-aware strategy, `candidate`.
-
-<ObjectDiagram
-  nodes={[
-    {
-      name: 'candidate',
-      fields: [
-        { name: 'leading', detail: 'play the highest point-value card' },
-        {
-          name: 'partner winning',
-          detail: 'play the lowest point-value card',
-        },
-        {
-          name: 'can beat the winner',
-          detail: 'play the cheapest legal card that wins',
-        },
-        {
-          name: 'cannot beat it',
-          detail: 'play the lowest point-value card',
-        },
-      ],
-    },
-  ]}
-/>
-
-The "partner winning" branch is easy to get backwards: it plays the
-*lowest* card, not the highest. A trick's point total is the sum of all
-four cards played to it, regardless of who wins it, so adding a high card
-to a trick your partner already has locked up doesn't win you anything
-extra, it just burns a strong card you'll want in a later trick, and risks
-losing it outright if a later opponent still overtakes the trick before
-it's done. Play cheap when the trick's already won, go all-in only when
-you're the one who actually has to win it.
-
-Against step 01's `highest_value` baseline, same bidding threshold (31) on
-both sides, N sized by the same pilot-then-size procedure as every match
-so far:
-
-<WinTieLossBar
-  team0Label="candidate"
-  team1Label="highest_value"
-  rows={[
-    {
-      label: 'candidate vs highest_value',
-      team0: 0.779,
-      tie: 0.158,
-      team1: 0.063,
-      highlight: true,
-    },
-  ]}
-/>
-
-<ConfidenceIntervalChart
-  unit="pts/deal"
-  metrics={[
-    {
-      label: 'candidate vs highest_value',
-      mean: 50.75,
-      ciLower: 47.37,
-      ciUpper: 54.13,
-      highlight: true,
-    },
-  ]}
-/>
-
-Not a marginal improvement. Always playing highest value routinely beats
-your own partner's already-winning card for no reason, and just as
-routinely burns strong cards on tricks that are already lost, partner-aware
-and trump-aware logic fixes both for free.
-
-`candidate` beating `highest_value` confirms partner-awareness helps at
-all, but it doesn't mean partner-awareness this specific way is the best
-idea available. Four more strategies were added deliberately, each testing
-one specific idea rather than just assuming it:
-
-<DecisionTable
-  decisions={[
-    {
-      label: 'lowest_value',
-      chose: 'Always discard the cheapest legal card',
-      insteadOf: "Assumed as a weak floor for comparison",
-      why: "Turned out not weak at all: conserving strong cards for tricks actually worth winning beats highest_value's zero-awareness burn.",
-    },
-    {
-      label: 'help_partner',
-      chose: 'Play highest when partner is already winning',
-      insteadOf: "candidate's play-lowest choice in that branch",
-      why: 'A plausible "help them win big" instinct, added specifically to measure it rather than just argue about it, since a trick\'s points go to the winning team regardless of which card either teammate contributed.',
-    },
-    {
-      label: 'lead_conserve_trump',
-      chose: 'Prefer a non-trump card when leading',
-      insteadOf: "candidate's highest-value-regardless lead",
-      why: 'Avoids burning trump early for no reason, before there is even a trick to fight for yet.',
-    },
-    {
-      label: 'second_hand_low',
-      chose: 'Always play low at trick position 2/3, decide only when last to act',
-      insteadOf: "candidate's partner-status check at every position",
-      why: 'Isolates position as the deciding factor instead of partner status, the classic trick-taking heuristic.',
-    },
-  ]}
-/>
-
-All 6 strategies share the exact same bidding logic, only card play
-differs, so before ranking them against each other properly, each first
-needed its own bidding threshold determined against the fixed random
-reference, the same sweep step 01 ran for `highest_value` alone, now
-generalized across all 6:
-
-| Strategy | Best threshold | Margin vs random | Win rate |
-|---|---|---|---|
-| `lead_conserve_trump` | 49 | +65.90 | 85.9% |
-| `candidate` | 49 | +54.17 | 80.4% |
-| `help_partner` | 58 | +51.95 | 79.5% |
-| `second_hand_low` | 49 | +50.24 | 78.7% |
-| `lowest_value` | 67 | +44.32 | 76.5% |
-| `highest_value` | 58 | +31.36 | 69.9% |
-
-The best threshold genuinely differs by strategy (49 to 67), even though
-bidding logic is identical across all six. That's not noise, it's a real
-interaction: a stronger card-play strategy can afford to declare on a
-wider range of hands, since it's more likely to turn a borderline hand
-into a made contract, while a weaker one needs a stricter filter to
-compensate. Bid and play aren't independently tunable stages.
-
-With every strategy at its own best threshold, a 7-agent round-robin
-(random plus all 6, 5,000 paired deals per pairing) ranks them the same
-way as the first tournament, one statistically-vetted verdict per pairing
-into OpenSkill, not raw per-deal outcomes. OpenSkill tracks each agent as
-a skill *distribution* (a mean `mu` and an uncertainty `sigma`), not a
-single number, and the **ordinal** below (`mu - 3*sigma`) is its
-conservative, deliberately pessimistic point estimate for ranking: an
-agent's true skill is claimed to sit above its ordinal with high
-confidence, so a wide gap between two agents' ordinals is a safer signal
-than comparing their `mu`s directly:
-
-<ConfidenceIntervalChart
-  unit="ordinal"
-  metrics={[
-    { label: 'lead_conserve_trump@49', mean: 16.45, ciLower: 9.53, ciUpper: 23.37, highlight: true },
-    { label: 'candidate@49', mean: 12.94, ciLower: 6.0, ciUpper: 19.89 },
-    { label: 'second_hand_low@49', mean: 8.07, ciLower: 1.17, ciUpper: 14.97 },
-    { label: 'help_partner@58', mean: 4.5, ciLower: -2.42, ciUpper: 11.42 },
-    { label: 'highest_value@58', mean: 0.3, ciLower: -6.7, ciUpper: 7.3 },
-    { label: 'lowest_value@67', mean: -2.69, ciLower: -9.72, ciUpper: 4.33 },
-    { label: 'random', mean: -7.56, ciLower: -14.66, ciUpper: -0.47 },
-  ]}
-/>
-
-`lead_conserve_trump` is the strongest strategy found so far, beating
-`candidate` head-to-head by +14.60 pts/deal, trump conservation on lead
-mattered more than the partner-aware follow logic that was this phase's
-original headline result. `candidate` also beats `help_partner`
-head-to-head by +30.75 pts/deal, confirming the "burning a good card for
-nothing" hypothesis directly rather than resting on the argument for it.
-
-<Callout variant="lesson" title="A whole strategy ranking can invert, not just a threshold">
-  Against random alone, `lowest_value` (+44.32 pts/deal) clearly beat
-  `highest_value` (+31.36). Head-to-head in this round-robin, it's the
-  opposite: `highest_value@58` beats `lowest_value@67` by +10.30 pts/deal,
-  95% CI [+9.39, +11.21], not noise. Same root cause as a threshold not
-  transferring across opponents, a fixed reference only validates against
-  that reference, but a stronger version of the claim: it's not just the
-  best *setting* for a strategy that can fail to generalize, it's which of
-  two whole strategies is even *better* that can flip depending on the
-  opponent. A round-robin against several distinct opponents is the only
-  way to know which of two things is actually better in general.
-</Callout>
-
-### ISMCTS |#ismcts|
-
-<PhaseJournal projectSlug="belote-ai" phaseId="ismcts" />
-
-OpenSpiel's information-set MCTS, which required implementing
-`resample_from_infostate` on `BeloteState` from scratch. Uniform sampling
-wasn't enough, it needed to respect suit-following/over-trump history to
-produce *consistent* worlds. This general technique (resample a plausible
-fully-observed world consistent with what the searching player actually
-knows, run ordinary MCTS on it, repeat over many sampled worlds) is called
-PIMC (Perfect Information Monte Carlo) or determinization search, the same
-approach real bridge- and poker-playing programs use.
-
-<Callout variant="lesson" title="Plain MCTSBot silently cheats on imperfect-information games">
-  OpenSpiel's `MCTSBot` doesn't reject imperfect-information games outright.
-  It runs against Belote without error. But `BeloteState` stores all four
-  hands as plain visible attributes, so MCTS's tree search has full access to
-  opponents' hidden cards during rollout. An omniscient bot in an evaluation
-  pool produces misleading win-rate and Elo numbers for *every other* agent it
-  plays against, not just itself. `ISMCTSBot`, which samples consistent worlds
-  via `resample_from_infostate` instead of looking at the true state, is the
-  only MCTS-family bot allowed in the project as a result.
-</Callout>
-
-<Callout variant="lesson" title="A seeded bot wasn't actually deterministic">
-  Building the resampler surfaced an upstream bug: `ISMCTSBot`'s default
-  Python resampler ignored the `random_state` it was seeded with,
-  constructing an unseeded `UniformProbabilitySampler` internally and
-  falling back to wall-clock time regardless of the seed passed in. The
-  C++ implementation was unaffected, only the Python constructor call was
-  wrong. Two identically-seeded ISMCTS runs looked reproducible right up
-  until they weren't. Fixed upstream in
-  [open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584)
-  (merged), with a test added to confirm seeded bots now behave identically
-  across runs. My first merged open-source PR.
-</Callout>
-
----
-
-With the resampler complete, ISMCTS was measured against step 02's actual
-tournament champion, `lead_conserve_trump@49`:
-
-<WinTieLossBar
-  team0Label="ISMCTS"
-  team1Label="lead_conserve_trump"
-  rows={[{ label: 'ISMCTS vs lead_conserve_trump', team0: 0.379, tie: 0.007, team1: 0.614, highlight: true }]}
-/>
-
-<ConfidenceIntervalChart
-  unit="pts/deal"
-  metrics={[{ label: 'ISMCTS vs lead_conserve_trump (N=1,550)', mean: -17.35, ciLower: -21.13, ciUpper: -13.56, highlight: true }]}
-/>
-
-A clear, decisive result. `lead_conserve_trump` is a genuinely stronger
-opponent than the `candidate` baseline ISMCTS was originally tested
-against, beating it by +14.60 pts/deal in its own right (step 02's
-tournament), so this reflects a tougher matchup, not a regression.
-
----
-
-At only 25 simulations with a pure-random rollout evaluator, ISMCTS wasn't
-yet competitive with the best hand-crafted heuristic found so far, leaving
-one open question: does more search budget close the gap? A sweep of
-`max_simulations` over a 40x range, same fixed opponent
-(`lead_conserve_trump@49`), 200 paired deals per point, a fixed and modest
-count rather than the usual pilot-then-size procedure: sizing to a target
-effect at each point would make the already-most-expensive
-high-simulation points also demand the most deals:
-
-<ConfidenceIntervalChart
-  unit="pts/deal"
-  metrics={[
-    { label: '10 simulations', mean: -31.05, ciLower: -41.93, ciUpper: -20.16 },
-    { label: '25 simulations', mean: -18.45, ciLower: -27.86, ciUpper: -9.03 },
-    { label: '50 simulations', mean: -18.31, ciLower: -28.76, ciUpper: -7.85 },
-    { label: '100 simulations', mean: -5.00, ciLower: -15.10, ciUpper: 5.10, highlight: true },
-    { label: '200 simulations', mean: -11.89, ciLower: -22.81, ciUpper: -0.97 },
-    { label: '400 simulations', mean: -19.24, ciLower: -29.49, ciUpper: -8.99 },
-  ]}
-/>
-
-Cost scales as expected, think time per decision is roughly linear in
-`max_simulations`:
-
-| `max_simulations` | ms/decision |
+| Check | Result |
 |---|---|
-| 10 | 2.8 |
-| 25 | 6.6 |
-| 50 | 13.9 |
-| 100 | 30.4 |
-| 200 | 67.9 |
-| 400 | 159.2 |
+| Spread, one dealer orientation | sd 123.0 |
+| Spread expected from averaging two draws alone | sd 87.0 |
+| Spread, dealer-swapped pair | **sd 63.0**, 28% tighter than averaging |
+| Random vs random, a known null | -0.04 [-3.52, +3.45] over 1,199 deals: **tie** |
+| Sized to detect 5 points a deal | 1,153 deals, achieved half-width 3.54 |
+| Bidding guard, always-take vs always-pass | caught at deal 0 |
 
-A ~57x cost increase for a 40x simulation increase, close to proportional.
+</Phase>
 
-<Callout variant="lesson" title="A wiggly curve isn't automatically a signal">
-  The margin improves steadily from 10 to 100 simulations, then gets *worse*
-  again from 100 to 400, back down near the 25/50-simulation level. Read as a
-  single line, that shape says "diminishing returns, then it gets worse," a
-  specific structural claim. But each point is only 200 paired deals, and
-  neighboring CIs substantially overlap (sims=100's upper bound and sims=400's
-  lower bound touch between -15.10 and -8.99). The one thing that does hold
-  up: sims=100 is the sole point whose CI includes zero, though with six
-  points swept, one landing on the "includes zero" side by chance is expected
-  even under a smooth true relationship, a reason to collect more data at
-  that point specifically, not to declare a sweet spot.
-</Callout>
+<Phase
+  id="hand-built-rules"
+  title="Hand-built rules"
+  status="done"
+  goal="Find the strongest player that can be written by hand, with bidding and card play tuned separately and in the right order."
+  outcome="Rules beat random by +12.6 a deal, and counting trumps beats counting points by +4.7."
+>
 
-The headline holds regardless of the wiggle: across the entire tested
-range, a 40x compute increase from 10 to 400 simulations, ISMCTS never
-clearly closes the gap with `lead_conserve_trump`. Even the best point is
-only "not distinguishable from even," not "ahead." Spending more search
-budget on a random-rollout evaluator doesn't reliably buy strength here,
-evidence for why the next phase went after evaluator quality instead of
-simulation count as the lever to pull.
+The first agent splits into two independent halves, a bid rule and a
+card-play rule, so every later comparison can freeze one and vary the other.
+That split paid off immediately: the whole agent beats random by +12.55, but
+isolated, bidding carries +20.86 while playing the highest-value card
+**loses to random card play** by 3.84.
 
-### Guided rollout & learned value function |#guided-rollout-value-function|
-
-<PhaseJournal projectSlug="belote-ai" phaseId="guided-rollout-value-function" />
-
-Step 03 left `ISMCTSBot` using a plain uniform-random rollout evaluator,
-about the noisiest possible leaf signal. The natural next move, a
-well-established idea in game AI history (early Go/chess MCTS engines saw
-real gains moving from "light" random playouts to "heavy"
-heuristic-informed ones), was rolling out with step 02's actual tournament
-champion, `lead_conserve_trump`, for every seat instead of uniform-random
-moves. Both sides below are still `ISMCTSBot`, same tree search, same
-simulation budget, so the comparison isolates the rollout policy's own
-contribution rather than measuring `lead_conserve_trump`'s standalone
-strength (which is the much larger +65.90/+14.60 pts/deal margins it puts
-up as a plain heuristic bot in step 02):
+Card play was ranked first, bidding pinned, against `highest_value`:
 
 <ConfidenceIntervalChart
   unit="pts/deal"
   metrics={[
-    { label: 'GuidedISMCTS (lead_conserve_trump rollout) vs RandomISMCTS', mean: 3.43, ciLower: -0.24, ciUpper: 7.10, highlight: true },
+    { label: 'win_or_dump', mean: 45.26, ciLower: 41.92, ciUpper: 48.60, highlight: true },
+    { label: 'help_partner', mean: 40.98, ciLower: 37.66, ciUpper: 44.30 },
+    { label: 'conserve_trump_on_lead', mean: 34.48, ciLower: 31.16, ciUpper: 37.81 },
+    { label: 'lowest_value', mean: 17.54, ciLower: 14.00, ciUpper: 21.08 },
+    { label: 'random card play', mean: 1.85, ciLower: -1.58, ciUpper: 5.29 },
   ]}
 />
 
-The most promising result in the project so far: its CI lower bound
-(-0.24) is a hair's width from excluding zero, a clear positive shift over
-ISMCTS's own default rollout, though not yet a confirmed win.
+Only then was the bid threshold tuned, against `win_or_dump` rather than
+against random. A second bid rule, `hand_strength`, adds trump length,
+honours and voids to raw card points, and beats the tuned points rule by
++4.73 [+1.28, +8.19].
 
-Guided rollouts trade one thing for another: `lead_conserve_trump` is
-deterministic, so many of the 25 simulations from similar starting points
-play out near-identically, less diversity across the ensemble than random
-rollouts get for free, even though any individual heuristic rollout is
-more realistic on its own. A documented, real tradeoff in MCTS research
-("light" vs "heavy" playouts), not a bug, here the accuracy gain from an
-actually-strong heuristic looks like it's offsetting that diversity loss
-rather than being cancelled out by it.
+<Callout variant="lesson" title="Screening is not settling">
+  `win_or_dump` led `help_partner` by 4.3 points against the common
+  reference, and head to head they tie, +1.10 [-2.29, +4.50]. Thresholds 50
+  and 56 looked equal to 44 against the old threshold, and both lose to it
+  directly. A ranking against a shared opponent orders a field; only a direct
+  comparison settles it.
+</Callout>
 
-To test the diversity-loss side of that tradeoff directly, `epsilon=0.3`
-added controlled randomness back into the rollout, a probability
-`epsilon` of a random action instead of `lead_conserve_trump`'s:
+</Phase>
+
+<Phase
+  id="monte-carlo"
+  title="Monte Carlo"
+  status="done"
+  goal="Test whether one step of policy improvement over the best rule beats that rule, with no network, no tree and no training."
+  outcome="One step of policy improvement over the best rule, no training: +38.7 a deal."
+>
+
+At each real choice the agent samples complete deals consistent with what
+its seat knows, plays every legal card out in each under `win_or_dump`, and
+keeps the best average. Two details do most of the work:
+
+- **Common random numbers.** Every candidate card is scored on the same
+  worlds, the pairing trick moved inside the agent.
+- **Forced decisions are skipped.** About a third of card-play decisions have
+  one legal card.
+
+Against `win_or_dump`, bidding pinned on both sides:
 
 <ConfidenceIntervalChart
   unit="pts/deal"
   metrics={[
-    { label: 'EpsilonGreedy (eps=0.3, lead_conserve_trump rollout) vs RandomISMCTS', mean: -2.00, ciLower: -5.34, ciUpper: 1.34 },
+    { label: '4 worlds (14.5 ms/deal)', mean: 26.03, ciLower: 22.52, ciUpper: 29.54 },
+    { label: '8 worlds (28.9 ms/deal)', mean: 27.44, ciLower: 23.95, ciUpper: 30.94 },
+    { label: '16 worlds (56.3 ms/deal)', mean: 33.44, ciLower: 29.91, ciUpper: 36.97 },
+    { label: '32 worlds (114.2 ms/deal)', mean: 38.68, ciLower: 35.18, ciUpper: 42.19, highlight: true },
   ]}
 />
 
-Worse, not better, flipping the near-significant +3.43 to a clearly
-negative -2.00.
+Four worlds already capture 67% of the 32-world margin, so most of the gain
+is the method. But every smaller budget also loses to 32 head to head, so
+32 worlds is a floor, not an optimum, at 385x the rule's cost.
 
-<Callout variant="lesson" title="The right amount of injected diversity depends on how good the heuristic already is">
-  Restoring diversity via `epsilon` is a reasonable hedge for a mediocre
-  heuristic, one with less accuracy worth protecting. For a heuristic
-  already strong enough to move the result on its own, the same exchange
-  rate flips: `epsilon` now spends 30% of every rollout decision on a
-  random action that degrades a policy that had become worth trusting
-  fully. Rollout accuracy and rollout determinism are separate levers, not
-  one and the same, restoring diversity only pays off when there isn't
-  much accuracy on the table to lose in the first place.
-</Callout>
+</Phase>
 
-Every comparison above measured `GuidedISMCTS-strong` against
-`RandomISMCTS`, which answers "is this rollout policy better than a random
-one," not the question this line of investigation was actually building
-toward: does search, even with the best rollout policy found, ever beat
-`lead_conserve_trump` outright, with no search at all?
+<Phase
+  id="play-net"
+  title="PlayNet"
+  status="done"
+  goal="Amortize the Monte Carlo agent into a network fast enough to play against, and find out what limits the copy."
+  outcome="86% of Monte Carlo's margin at 1/152 of the cost; no lever closes the last 5.17 points."
+>
 
-<ConfidenceIntervalChart
-  unit="pts/deal"
-  metrics={[{ label: 'GuidedISMCTS-strong vs lead_conserve_trump (N=1,691)', mean: -6.23, ciLower: -9.83, ciUpper: -2.64, highlight: true }]}
-/>
-
-No: even the best rollout policy tried doesn't close the gap, the plain
-heuristic still wins clearly, its CI excludes zero. Still a real step
-forward from step 03's plain `ISMCTSBot` (random rollout) against the same
-opponent (-17.35 pts/deal there vs -6.23 here). Search with a good rollout
-policy narrows the gap at only 25 simulations, it doesn't close it.
-
----
-
-The learned value network itself was the other half of this phase, and it
-never worked: trained as an ISMCTS leaf evaluator, it lost decisively,
-worse than random rollouts. The open question when this phase was first
-written up was whether that was a real finding about value functions in
-this game, or a bug.
-
-Mostly a bug. A follow-up run trained a 2x2 grid of (leaking split, grouped
-split) × (SmoothL1, MSE) on identical data, with 10% of deals held out
-before any arm saw them:
-
-<DecisionTable
-  decisions={[
-    {
-      label: 'Train/val split',
-      chose: 'Split by deal',
-      insteadOf: 'Split by decision (the original recipe)',
-      why: "Every decision inside one deal shares that deal's outcome, so splitting by decision lets validation rows leak the answer. Fixing this alone moved R² +0.103 → +0.354.",
-    },
-    {
-      label: 'Loss function',
-      chose: 'MSE',
-      insteadOf: 'SmoothL1 (the original recipe)',
-      why: 'At this scale SmoothL1 fits a conditional median. A failed contract is a hard point mass at a large negative score, so the median jumps between outcomes instead of averaging them, and every consumer of this number wants an average.',
-    },
-  ]}
-/>
-
-Applying both took overall R² from **+0.103 to +0.376** and turned every
-game-phase estimate positive. So "a learned value function does not work
-in this game" was substantially a statement about a leaking split and the
-wrong loss, not about value functions.
-
-<Callout variant="lesson" title="One phase's diagnosis became the next phase's starting point">
-  One number kept the fix from being the end of the story: even corrected,
-  bid-state accuracy stayed near zero (**R² +0.016**). A general-purpose
-  value net, however well trained, apparently cannot represent what a bid
-  decision is worth. That is what the next phase is built around, not a
-  bigger or better-trained version of this network, but a small,
-  purpose-built one that only ever looks at bid states.
-</Callout>
-
-### Bidding net |#bidding-net|
-
-<PhaseJournal projectSlug="belote-ai" phaseId="bidding-net" />
-
-With bidding singled out as its own problem, two things needed fixing
-before any network could help, neither of them about model architecture.
-
----
-
-**The auction was invisible.** A bid1 state and the bid2 state that
-follows it produced a bit-identical `information_state_tensor` for the
-same player — same 5 cards, same turned card, no trump decided yet — with
-only 9 of 1,310 dimensions ever non-zero at a bid state. No policy could
-condition on which bidding round it was in, or on how many opponents had
-already passed. It was also a perfect-recall violation: a player couldn't
-remember their own pass.
-
-<Callout variant="lesson" title="A near-empty tensor is still a passing test suite">
-  1,310 dimensions with only 9 ever set isn't a bug a test catches by
-  itself, every one of those dimensions is technically correct, just
-  structurally useless at this state. `BeloteState` now records
-  `_bid1_passes`/`_bid2_passes` directly, and the observer gained a
-  `bid_round` block plus a perfect-recall pass record. Growing the tensor
-  1,299 → 1,310 dimensions was the fix; the other ~1,300 were never the
-  problem.
-</Callout>
-
-Before any network, the hand-written bid rule got a second look too.
-`hand_strength` (v2) fixed three blind spots the original rule had: trump
-length, the turned card the taker actually receives (worth 20 points on
-its own if it's the trump jack, previously scored as worth nothing), and
-seat/auction position — worth **+35.01 pts/deal** against the
-long-standing champion, and **+11.12** against that same champion retuned
-to a better threshold instead. First agent in the project to beat the
-champion, and it contains no learning at all.
-
----
-
-`BidNet` is what a network gets to add once the auction is actually
-visible and a rule that plays it well already exists to be a training
-opponent. It answers one question:
-
-> How many points better or worse off am I if I take, compared with
-> passing?
-
-Positive means take; negative means pass. Every earlier rule compared a
-hand's point total against a fixed threshold, which has no representation
-of what *passing* is worth — and passing is not worth zero: the auction
-continues, someone else may take, the deal may be redealt. BidNet
-estimates both sides and compares them, which is the substantive
-difference, not the fact that it's a network.
+`MCPlayBot.evaluate()` already values every legal card, so 25,000 played
+deals yield 846,086 labels for free. `PlayNet` predicts each card's advantage
+over the average legal card, on a trump-relative encoding, with the split
+grouped by deal because ~34 decisions share each deal's outcome.
 
 <NetworkDiagram
   layers={[
-    { label: 'Input', size: 61, detail: 'trump-relative, canonicalised' },
-    { label: 'Hidden 1', size: 128, detail: 'Linear → ReLU → Dropout 0.1' },
-    { label: 'Hidden 2', size: 64, detail: 'Linear → ReLU → Dropout 0.1' },
-    { label: 'Output', size: 1, detail: 'take-vs-pass advantage (points)' },
+    { label: 'Input', size: 145, detail: '132 for the position, 13 for the candidate card' },
+    { label: 'Hidden 1', size: 256, detail: 'Linear, ReLU' },
+    { label: 'Hidden 2', size: 128, detail: 'Linear, ReLU' },
+    { label: 'Output', size: 1, detail: "the card's advantage, in points" },
   ]}
-  caption="16,257 parameters total, 68 KB on disk."
+  caption="Chosen over 128 × 64 by held-out R² (+0.411 against +0.405). Capacity is not the limit."
 />
 
-Two choices in the encoding turned out to matter: the hand always includes
-the **turned card** (you receive it if you take, so leaving it out
-undervalues taking the trump jack to zero — exactly the old rule's blind
-spot), and the three side suits are **canonicalised**, sorted
-longest-and-strongest first relative to the candidate trump, so one hand
-shape becomes one input instead of 24 relabelings of it. Both symmetries
-are asserted by tests rather than assumed.
+It beats `win_or_dump` by +33.81 against the search's +39.12, at 0.79 ms a
+deal against 120, and loses to the search head to head, -5.17 [-6.59,
+-3.74]. Every lever on that gap was measured:
 
-What the 61 numbers actually produce, run through the trained checkpoint
-rather than invented:
+| Lever | Result |
+|---|---|
+| 128 label worlds instead of 32 | +0.018 R² |
+| Twice the data | +1.14 in play, tie |
+| Who played each card | -0.76 in play, tie |
+| A listwise ranking loss | -0.08 [-0.63, +0.46], tie |
+| As the search's rollout policy | +1.48, tie, at 1.4x the cost |
+| A value net as the search's leaf evaluator | -4.03 at depth 8, -23.29 at depth 0 |
 
-| Hand held | Turned card | Candidate trump | BidNet's output | Call |
-|---|---|---|---|---|
-| 9♠ K♠ A♦ A♥ 10♣ | J♠ | Spades | **+97.6** | Take |
-| 7♣ 8♦ 9♥ 10♣ Q♦ | 7♠ | Spades | **-88.2** | Pass |
-| 7♣ 8♦ 9♥ 10♣ Q♦ | J♠ | Spades | **-6.8** | Pass |
+<Callout variant="lesson" title="Better against a reference is not closer to the teacher">
+  Five times the training data moved `PlayNet` from +28.58 to +33.81 against
+  the rule, and left it exactly as far from the search it imitates: -7.96
+  before, -8.38 after, intervals overlapping.
+</Callout>
 
-The first two are the easy cases: a hand with real trump length and two
-side aces is worth taking by a wide margin, and a hand with no trump at all
-picking up a weak trump card is not. The third is the same weak hand as
-the second, with only the turned card swapped for the trump jack — worth
-20 points and the highest trump, guaranteed. That single swap moves the
-output **+81.4 points**, from a clear pass to a near-miss. It still passes,
-but not by much, which is exactly the old v1 rule's blind spot made
-visible: it would have scored that swap as worth nothing at all, since it
-never looked at the card it was about to receive.
+</Phase>
 
----
+<Phase
+  id="bid-net"
+  title="BidNet and the search-free agent"
+  status="done"
+  goal="Replace the hand-written bid rule with a network, then assemble both networks into an agent with no search at run time."
+  outcome="BidNet out-bids the rule by +5.59; with PlayNet it ties Monte Carlo at 148x the speed."
+>
 
-The part that actually made the network work wasn't the network. Labelling
-one decision means knowing what taking is worth, but the other three hands
-are hidden, and playing a single deal out gives an answer that swings by
-about 138 points — more noise than signal. The generator instead
-**re-deals the unknown cards 24 times**, plays each version out twice (once
-taking, once passing, from the same shuffle), and averages:
+The auction has no teacher, so each bid's value is measured by playing it
+out. Every legal bid is cloned and played to the end with `PlayNet`, in 24
+re-dealt worlds consistent with the bidder's hand, on the same worlds for
+every bid. Resampling cuts label noise within a trump-length bucket from
+147.2 to 46.5, and the labels read the way a player would expect:
 
-```
-advantage = average(margin when taking) - average(margin when passing)
-```
-
-That brings per-answer noise down to about 28 points against a real signal
-that varies by about 59, roughly a five-fold improvement in signal clarity
-that earlier attempts in this project never had, because they all learned
-from single deals.
+| Round-1 trump length | Take minus pass |
+|---|---|
+| 0-2 | -54.9 |
+| 3 | +28.1 |
+| 4+ | +77.2 |
 
 <ConfidenceIntervalChart
   unit="pts/deal"
   metrics={[
-    { label: 'BidNet vs champion (hand_points@49)', mean: 28.00, ciLower: 24.36, ciUpper: 31.64, highlight: true },
-    { label: 'BidNet vs retuned champion (hand_points@39)', mean: 15.88, ciLower: 12.46, ciUpper: 19.30 },
-    { label: 'BidNet vs hand_strength@71 (v2)', mean: 11.25, ciLower: 7.65, ciUpper: 14.86 },
+    { label: 'BidNet vs rule, PlayNet playing (4,695 deals)', mean: 5.59, ciLower: 4.18, ciUpper: 6.99, highlight: true },
+    { label: 'BidNet vs rule, Monte Carlo playing (6,000 deals)', mean: 5.50, ciLower: 4.05, ciUpper: 6.96 },
+    { label: 'BidNet + PlayNet vs Monte Carlo agent (6,000 deals)', mean: -0.63, ciLower: -2.06, ciUpper: 0.81 },
   ]}
 />
 
-Measured on a high-precision test set (each answer averaged over 384
-re-deals, leaving only ~7 points of noise in the yardstick itself):
-**94.2% right calls** against 71.8% for always passing, explained
-variation **0.899**. For comparison, the project's general-purpose value
-net scores **-0.065** at these same states — worse than always guessing
-the average.
+`BidNet` is also less selective than the rule (0.20 redeals a deal against
+0.55), so its margin is not bought by declining to play.
 
-<Callout variant="lesson" title="A margin against a shared opponent is not a ranking">
-  `hand_strength@71` (v2) beats the champion by more (+35.01) than BidNet
-  does (+28.00), yet BidNet beats `hand_strength@71` head-to-head
-  (+11.25). Both are true and neither is an error: BidNet was trained
-  specifically as a best response to v2, and margins against a common
-  opponent don't form a total order. Recorded rather than smoothed over.
+<Callout variant="lesson" title="Two runs, two verdicts, one effect">
+  The same matchup read +6.75, a win, over 800 deals, and +1.92, a tie, at
+  another seed. A run sized for 5 points cannot reliably see a 5-point
+  effect. Resizing for 2 points settled it at +5.59, and turned a ±5 tie with
+  the search into level within ±2.
 </Callout>
 
----
+</Phase>
 
-Every further lever tried on `BidNet` came back flat:
+<Phase
+  id="decision-grading"
+  title="Decision grading"
+  status="done"
+  goal="Measure a player one decision at a time, so that a player too slow or too costly for a match lands on a scale that already means something."
+  outcome="One decision becomes one measurement: 411 positions rank every player in match order."
+>
 
-<DecisionTable
-  decisions={[
-    {
-      label: 'More deals',
-      chose: 'Measured: flat',
-      insteadOf: 'Assumed more data would help',
-      why: 'Held-out explained variation went +0.727 → +0.745 across 2,700 → 21,600 training deals; doubling from half to full data bought +0.004.',
-    },
-    {
-      label: 'Bigger network',
-      chose: 'Measured: flat',
-      insteadOf: 'Assumed more capacity would help',
-      why: 'A 64x32 network scores +0.743; a 512x256x128 network, 8x the capacity, scores +0.744.',
-    },
-    {
-      label: 'Train longer',
-      chose: 'Measured: flat',
-      insteadOf: 'Assumed under-training',
-      why: 'Validation loss goes flat from epoch ~80 and never exceeds training loss, so it never overfit either, it simply finished learning what the data contains.',
-    },
-    {
-      label: 'Learn from itself',
-      chose: 'Measured: flat',
-      insteadOf: 'Assumed self-play iteration would find a better policy',
-      why: 'A generation trained against generation 1 as the reference ties it, +0.84 pts/deal, 95% CI [-2.36, +4.03]. The fixed point converged in one step: no best-response cycling, but no gain either.',
-    },
-    {
-      label: 'More precise labels',
-      chose: 'Measured: flat, and worse head-to-head',
-      insteadOf: 'Assumed noisier labels were the ceiling',
-      why: 'The same compute spent as 4x the re-deals over 4x fewer decisions scores identically (0.898 vs 0.899) on a shared clean test set, and loses head-to-head by -1.87 pts/deal. More distinct situations beat more precision per situation.',
-    },
-  ]}
+Monte Carlo at 128 worlds values every legal card at a position, so a choice
+is scored exactly: **cost = best card's value - chosen card's value**. 411
+decisions from 40 deals, each stored with the action history that rebuilds
+the state, grade every player already on the ladder:
+
+| Player | Points given up per decision | Picks a best card |
+|---|---|---|
+| Random legal card | 8.25 | 42.6% |
+| `win_or_dump` | 4.01 | 61.6% |
+| `PlayNet` | 2.69 | 71.3% |
+| Monte Carlo, 32 worlds | 0.92 | 83.2% |
+| The teacher, 128 worlds | 0.48 | 86.1% |
+
+A player can also state claims, checked at three levels: public ("my partner
+is winning"), hidden ("an opponent holds the ace") and future ("this ace
+takes the trick"). The checker is tested against the hands it must not look
+at, and agrees on all 120 positions.
+
+<Callout variant="lesson" title="A grader ranks players; it does not predict margins">
+  The language model gave up 10.80 points per decision over 10.7 decisions a
+  deal, which suggests a 115.7-point loss. The match measured 35.92. A card is
+  charged for a continuation that never happens, and a lost deal cannot be
+  lost twice, so a winner still has to be confirmed in a match.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="language-model"
+  title="A language model at the table"
+  status="done"
+  goal="Put a local language model on the same scale as every other player: first graded one decision at a time, then over whole deals."
+  outcome="A local 12B model gives up more per decision than a random card, and loses by 35.9 a deal."
+>
+
+`gemma4:12b`, served by Ollama, sees only what its seat can see and answers
+with a card, a reason and any claims, under a schema that deliberately does
+not enumerate the legal cards. On 150 graded decisions it gives up **9.28
+points per decision** against 6.13 for a random legal card, and thinking
+first does not help.
+
+A LangGraph pipeline then hands it the counts it got wrong (trumps out,
+master cards, what beats the trick) and splits the decision into four steps:
+
+| | One call | Four steps |
+|---|---|---|
+| Points given up per decision | 9.15 | 9.23 |
+| "My side wins this trick", correct | 62.1% | **78.7%** |
+| Model calls / seconds per decision | 1 / 7.7 | 3 / 24.2 |
+
+It describes the position better and chooses no better: what limits it is
+judgement, not information. Over 24 whole deals against Monte Carlo it loses
+**-35.92 [-52.54, -19.29]** a deal.
+
+<Callout variant="lesson" title="It wins the trick in front of it and pays later">
+  Its costliest cards come with fluent reasons: "leading a high trump to
+  maintain control" gave up 116.6 points. The pattern holds across deals: it
+  spends winners on tricks it did not need and calls it control.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="play-front-end"
+  title="Playing the agent"
+  status="done"
+  goal="Put a person at the table against the strongest agent, the only opponent from outside the project that any agent here faces."
+  outcome="A person plays BidNet + Monte Carlo in a browser, then reviews and replays every decision."
+>
+
+The browser page is a view over the real `python_belote` state served from
+Python, not a JavaScript copy of the rules, so a deal played there is the
+same game the matches measure. A terminal version plays the same agent, and
+both keep a running record of the human's margin, with its interval.
+
+<Screenshot
+  src="/images/projects/belote-ai/review.webp"
+  alt="Post-deal review showing the contract verdict, all four dealt hands, and an eight-trick grid of who played which card, with trick winners outlined"
+  caption="After the deal: the verdict, every hand as dealt, and every trick. The deal can be saved to a file and reopened later."
 />
 
-Held-out error (30.1 points) against the training-answer noise floor (28.2
-points) puts the model's own error against the true answer at about 10.5
-points: it has extracted essentially everything its training data
-contains. **Bidding is closed at this representation** — the strongest
-part of the project, and the last part to be looked at.
+<Screenshot
+  src="/images/projects/belote-ai/replay.webp"
+  alt="Card-by-card replay at trick 3, showing each seat's remaining hand and the evaluation of the J of hearts decision, identical to the live evaluation"
+  caption="The replay steps through the deal a card at a time, with each seat's remaining hand and the evaluation made at that moment: the same +32.2 shown live, not recomputed."
+/>
 
-Full writeup, including the input table and a chart of the training
-answers around the take/pass boundary, lives in
-[`docs/bidding-net.md`](https://github.com/tpemeja/belote-ai/blob/main/docs/bidding-net.md)
-(designed twin published
-[here](https://claude.ai/code/artifact/31b43a0d-cd67-4f4d-911f-6e2f31e28718)).
+</Phase>
 
-</PhaseCarousel>
+</PhaseLedger>
 
 ## Tech stack
 
@@ -1188,43 +477,24 @@ What each piece of the stack is actually doing, and where to look for more:
 
 <TechStack notes={frontmatter.technologyNotes} />
 
-## Approach
-
-Every phase above was built and evaluated against the harness before moving
-to the next, rather than assumed. That discipline paid for itself
-repeatedly: it caught a plain-MCTSBot "cheat" (full hand visibility during
-rollout), an unseeded resampler silently breaking ISMCTS reproducibility
-(fixed upstream in
-[open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584), merged),
-and a promising epsilon-greedy result that looked real at 1,000 simulated
-deals but collapsed to statistically indistinguishable at 10,000, each one
-caught
-before it could be mistaken for real progress.
-
 ## Future improvements
 
-The value network question from the "Guided rollout & learned value
-function" phase is resolved: the failure was mostly a leaking split and a
-loss fitting the wrong statistic, not a structural limit on value
-functions in this game. Bidding, once given its own purpose-built network,
-is now closed at its current representation, every measured way of
-improving it came back flat. The project's open question is the other side
-of that same result: card play, and whether the search- and rule-based
-results measured earlier still hold once bidding stops being a
-confounding variable sitting underneath them. Longer term, the goal is to
-upstream `python_belote` into `google-deepmind/open_spiel` so the project no
-longer depends on a personal fork for its core game implementation.
+The game, the hand-built player and the networks are settled; the language
+model is paused. These are the known gaps, and the repo's
+[`docs`](https://github.com/tpemeja/belote-ai/tree/main/docs) list each part's
+measured dead ends alongside them:
 
-Separately, worth revisiting once there's time for it: Belote's redeal
-("everyone passes twice") is currently handled as an in-tree chance
-branch, which is what triggered the `allow_inconsistent_action_sets`
-`KeyError` in the ISMCTS phase. OpenSpiel's own Euchre implementation
-avoids that entire class of bug by rule design, `stick_the_dealer=true`
-forces the dealer to name trump on the last bid so an all-pass redeal can
-never happen at all. Belote's official rules don't allow that shortcut,
-but terminating the state on any redeal and having the harness deal a
-fresh one externally would remove the collision the same way, and would
-arguably be more rule-faithful too, since a thrown-in deal doesn't score
-under the official rules either. Not urgent since the existing flag fully
-resolves the crash, but a cleaner model than looping in-tree if the game
-implementation gets revisited.
+- **Worlds sampled from a model of the hidden hands.** Monte Carlo draws the
+  opponents' hands uniformly from every deal consistent with the play and
+  ignores what the auction and discards say. A network predicting who holds
+  which card would make a stronger teacher without changing anything
+  downstream; Monte Carlo that sees the real deal bounds what it can buy, and
+  is not yet measured.
+- **Larger language models, and a harness aimed at the choice.** Everything
+  measured is one local 12B model. Since handing it more facts did not help,
+  the next harness should target the decision itself, for example the model
+  proposing candidate cards for Monte Carlo to check. Bidding by the model is
+  untested too.
+- **Partner signalling.** No agent here signals on purpose, so tactical plays
+  like an *appel* (calling for a suit through a discard) or an *impasse* (a
+  finesse) are neither produced nor measured.

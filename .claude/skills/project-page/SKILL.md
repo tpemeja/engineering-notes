@@ -20,7 +20,27 @@ The page is **looked at** before it is read. Prefer anything with shape over a p
 5. **Tech stack**: `<TechStack notes={frontmatter.technologyNotes} />`.
 6. **Future improvements**: known gaps, not a roadmap.
 
-Frontmatter carries `title`, `description`, `status`, `startDate`, optional `endDate`, `technologies`, `technologyNotes`, `githubUrl`, `relatedNotesSlugs`, `order`. It carries no phase data and no `progress`.
+Frontmatter carries `title`, `description`, `status`, `startDate`, optional `endDate`, `technologies`, `technologyNotes`, `githubUrl`, `highlights`, `relatedNotesSlugs`, `order`. It carries no phase data and no `progress`.
+
+## Highlights
+
+`highlights` is the strip `ProjectLayout` renders under the header, above Overview: the three or four things a recruiter should leave with if they read nothing else.
+
+```yaml
+highlights:
+  - headline: '+38.7 pts/deal'
+    detail: 'Monte Carlo policy improvement over the best hand-written rule, the largest gain on the ladder.'
+  - headline: 'Fix merged upstream'
+    detail: "Found and fixed a seeding bug in OpenSpiel's Python ISMCTS."
+    href: 'https://github.com/google-deepmind/open_spiel/pull/1584'
+```
+
+- **Three or four**, never more (the schema caps it at four).
+- **`headline` is the claim**, at most 28 characters: a number with its unit, or a short distinction ("Published on PyPI", "In real use"). **`detail` backs it**, one sentence under 140 characters.
+- **Each is a result or a distinction, not a feature.** Apply the Result test: "Deterministic mocks" earns a card because it is a guarantee a user can rely on; "Has a settings page" does not.
+- **Pick different kinds.** A strong set mixes a measured result, an outside signal (merged upstream, published, used by a real person), and what was hard. Four numbers from one phase is one highlight repeated.
+- **Only what the page or repo proves.** Every figure must appear in the body or trace to a record; a highlight is the page's best evidence brought forward, never a new claim.
+- `href` is optional: link to the proof (a merged PR, a note, a package page) when there is one to point at. Never invent a URL.
 
 ## Phases
 
@@ -106,6 +126,7 @@ Journal entries surface at page level through `relatedProjectSlug`, rendered by 
 
 ## Before calling it done
 
+- Three or four `highlights`, each a result or distinction backed by the body, with headlines of 28 characters or fewer.
 - Every `<Phase>` carries all five props, and every `outcome` states a result rather than a description of activity.
 - Every phase carries at least one visual, and no paragraph runs longer than about four lines where a list or a diagram would do.
 - `grep -n "—" <file>` on the file returns nothing.

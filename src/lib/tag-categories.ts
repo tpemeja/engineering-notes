@@ -24,6 +24,8 @@ const CATEGORY_BY_TAG: Record<string, TagCategory> = {
   pytorch: 'AI/ML',
   ismcts: 'AI/ML',
   openskill: 'AI/ML',
+  langgraph: 'AI/ML',
+  ollama: 'AI/ML',
   gemini: 'AI/ML',
   'faster-whisper': 'AI/ML',
 
