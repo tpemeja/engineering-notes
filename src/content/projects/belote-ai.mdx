@@ -469,6 +469,31 @@ both keep a running record of the human's margin, with its interval.
 
 </Phase>
 
+<Phase
+  id="language-model-next"
+  title="Larger models and a new harness"
+  status="planned"
+  goal="Find out whether what holds the language model back is its size or the way it is asked, measured on the same 150 graded decisions and then in whole deals."
+  outcome="Target: a language model that gives up less per decision than a random legal card."
+>
+
+The 12B model reads the board well and chooses badly, and handing it more
+facts changed nothing, so the next steps test judgement rather than
+information. The bar is fixed in advance: 6.13 points given up per
+decision, a random legal card on the same positions.
+
+- **Larger models.** `gemma4:26b` and the frontier models, graded first, then
+  in whole deals. That includes whether a stronger model forms beliefs about
+  the hidden hands; the 12B model made 3 reads beyond what the play proves in
+  150 decisions.
+- **A harness aimed at the choice.** The model proposes a few candidate cards
+  for Monte Carlo to check, or plays through a tool-using agent loop, instead
+  of receiving more facts.
+- **Bidding by the model.** A rule bids for it today. Take-or-pass on five
+  cards is a smaller test of judgement, and decision grading extends to it.
+
+</Phase>
+
 </PhaseLedger>
 
 ## Tech stack
@@ -480,7 +505,8 @@ What each piece of the stack is actually doing, and where to look for more:
 ## Future improvements
 
 The game, the hand-built player and the networks are settled; the language
-model is paused. These are the known gaps, and the repo's
+model's next steps are the planned phase above. Beyond those, these are the
+known gaps, and the repo's
 [`docs`](https://github.com/tpemeja/belote-ai/tree/main/docs) list each part's
 measured dead ends alongside them:
 
@@ -490,11 +516,6 @@ measured dead ends alongside them:
   which card would make a stronger teacher without changing anything
   downstream; Monte Carlo that sees the real deal bounds what it can buy, and
   is not yet measured.
-- **Larger language models, and a harness aimed at the choice.** Everything
-  measured is one local 12B model. Since handing it more facts did not help,
-  the next harness should target the decision itself, for example the model
-  proposing candidate cards for Monte Carlo to check. Bidding by the model is
-  untested too.
 - **Partner signalling.** No agent here signals on purpose, so tactical plays
   like an *appel* (calling for a suit through a discard) or an *impasse* (a
   finesse) are neither produced nor measured.
