@@ -1,0 +1,255 @@
+---
+title: 'Instagram Dashboard'
+description: 'Password-protected website on top of the Instagram Agent: account growth and post trends, AI-reviewed comments to reply to, hide or acknowledge, kept in sync with the tablet.'
+status: active
+startDate: 2026-09-01
+technologies:
+  [
+    'React',
+    'TypeScript',
+    'FastAPI',
+    'AWS Lambda',
+    'CloudFront',
+    'Terraform',
+  ]
+technologyNotes:
+  - name: 'React'
+    context: 'The single-page app, with React Router and no UI or chart library: every chart is a small hand-written SVG component.'
+  - name: 'TypeScript'
+    context: 'Typed mirrors of the agent API responses, including which fields are null when something was not measured.'
+  - name: 'Vite'
+    context: 'Dev server with an /api proxy, so local development runs on one origin like production does.'
+  - name: 'FastAPI'
+    context: 'The backend: password login, signed session cookie, and a proxy to the agent that holds the management token.'
+  - name: 'AWS Lambda'
+    context: 'The backend behind API Gateway on its own subdomain.'
+  - name: 'S3 + CloudFront'
+    context: 'Static hosting for the SPA; the bucket blocks all public access and is only readable through Origin Access Control.'
+  - name: 'Secrets Manager'
+    context: 'Holds the management token, site password and session key, read at runtime rather than set as Lambda env vars.'
+  - name: 'Terraform'
+    context: 'Backend, frontend hosting and DNS, deployed from GitHub Actions through an OIDC role.'
+highlights:
+  - headline: 'Token never in browser'
+    detail: 'A small backend holds the API token server-side; the browser only ever gets an HttpOnly session cookie.'
+  - headline: 'In sync with the tablet'
+    detail: 'A comment handled on the website drops off the tablet, and the other way round, through one shared table.'
+  - headline: 'Missing is never zero'
+    detail: 'Unmeasured days render as a dash and sort last, so a gap in collection never reads as a post nobody watched.'
+  - headline: 'Built for a 10-Lambda limit'
+    detail: 'The client caps itself at three requests in flight after a page load triggered API Gateway throttling.'
+relatedNotesSlugs: []
+order: 16
+---
+
+import Callout from '../../components/content/Callout.astro';
+import PhaseLedger from '../../components/content/PhaseLedger.astro';
+import Phase from '../../components/content/Phase.astro';
+import TechStack from '../../components/content/TechStack.astro';
+import Screenshot from '../../components/content/Screenshot.astro';
+import DecisionTable from '../../components/content/DecisionTable.astro';
+import BranchDiagram from '../../components/content/BranchDiagram.astro';
+
+## Overview
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/insights.webp"
+  alt="Dashboard Insights page with a followers card, a posts tracked card, 7/30/90 day toggles and a follower growth chart marked where the tablet import hands over to the poller"
+  caption="The Insights page. The freshness line says which half of the page is sealed daily history and which half is live. All screenshots use a fictional account."
+/>
+
+A website for checking my wife's Instagram account from anywhere, built on
+top of the [Instagram Agent](/projects/instagram-agent/). The
+[tablet](/projects/instagram-insight/) is great for a glance at home, but it is
+stuck on a wall. This is the same data on a phone or a laptop, with more room
+for tables and for handling comments.
+
+It has five pages: Insights, Posts, Trends, Comments and Events. It started
+read-only and now moderates too. A reply, hide or delete goes through the
+agent, and lands in the same action table the tablet reads.
+
+## Problem
+
+- **The API token is not scoped per account.** Any valid management token
+  can read any account, so it must never reach a browser where devtools
+  could pull it out.
+- **The site is on the public internet.** It has to be reachable from
+  anywhere, but stay private to the two of us, with no account system to
+  build or run.
+- **Two clients, one to-do list.** A comment answered on the tablet must not
+  still show as "to handle" on the website, and the other way round.
+- **The data has holes that look like zeros.** Collection started at
+  different times for different metrics, and daily history is only sealed
+  two days late.
+- **The AWS account allows 10 concurrent Lambdas.** Each dashboard call uses
+  two (this backend plus the agent), and the Insights page asks for nine
+  things at once.
+
+## Approach
+
+The browser gets nothing it could leak. The backend holds every secret, the
+frontend holds a session cookie, and each route is a straight pass-through
+to the agent scoped to one account ID. Query params and response shapes are
+forwarded unchanged, so the agent stays the only place where a metric is
+defined.
+
+The UI is honest about what it does not know. A `null` from the agent is
+rendered as a dash and sorted last, a window that covered fewer days than it
+names gets a marker, and the Insights page states how fresh each half of
+its data is.
+
+## What I built
+
+<PhaseLedger>
+
+<Phase
+  id="secure-proxy"
+  title="Backend proxy and login"
+  status="done"
+  goal="Put the dashboard on the public internet without the management token, the password or the session key ever leaving the server side."
+  outcome="The browser only sees a session cookie; every secret is read at runtime from Secrets Manager."
+>
+
+<BranchDiagram
+  source={{ name: 'Browser', detail: 'password login, then an HttpOnly session cookie' }}
+  branchLabel="two subdomains, one registrable domain"
+  branches={[
+    { name: 'CloudFront + S3', detail: 'the static SPA, bucket reachable only through OAC' },
+    { name: 'Backend Lambda', detail: 'checks the session, adds the bearer token' },
+  ]}
+  mergeLabel="HTTPS + JWT, scoped to one account"
+  merge={{ name: 'Instagram Agent API', detail: 'metrics, comments, analyses, proxy writes' }}
+/>
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Architecture',
+      chose: 'A thin FastAPI backend in front of the agent',
+      insteadOf: 'A static site calling the agent directly',
+      why: 'The agent token is not scoped per account, so a purely client-side app would hand it to anyone who opens devtools.',
+    },
+    {
+      label: 'Secrets',
+      chose: 'One Secrets Manager entry, values pushed out-of-band',
+      insteadOf: 'Lambda environment variables from Terraform',
+      why: 'Env vars are readable with lambda:GetFunctionConfiguration and pass through CI and Terraform state on the way there.',
+    },
+    {
+      label: 'Cookie',
+      chose: 'HttpOnly, SameSite=Lax, plus an Origin check on writes',
+      insteadOf: 'SameSite=None',
+      why: 'The site and API share kaseovo.com, so Lax works across the two subdomains without weakening CSRF protection.',
+    },
+  ]}
+/>
+
+The password is compared with `secrets.compare_digest`, and rotating the
+session key logs every session out, which is the point of rotating it.
+
+</Phase>
+
+<Phase
+  id="insights"
+  title="Insights"
+  status="done"
+  goal="Show how the account is doing (growth, audience, sentiment, when and how content lands) on one page, without claiming more freshness than the data has."
+  outcome="Growth, audience and posting patterns on one page, each labelled with how fresh its data is."
+>
+
+The page is a stack of chart cards, each backed by one agent route: follower
+growth (with a marker where the tablet import hands over to the poller),
+follower momentum at 5-30 minute resolution, daily activity, audience,
+comment sentiment, reach by content type, engagement by format, the posting
+slot heatmap and time to 80% reach.
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/still-pulling.webp"
+  alt="Still pulling card: a ranked list of posts by views gained over the last 7 days, each with a bar and its lifetime total"
+  caption="Still pulling: which posts are still gaining an audience. Views for a Reel, accounts reached for a feed post, since Meta reports one or the other. Fictional data."
+/>
+
+<Callout variant="lesson" title="A page load can throttle your own backend">
+  Nine requests at once meant ~18 concurrent Lambdas against a limit of 10.
+  The overflow came back as `503 Service Unavailable` from API Gateway, which
+  CloudWatch shows as throttles with zero errors, because nothing crashed.
+  Every request now goes through one client-side gate of three in flight,
+  which leaves room for the poller, webhook and processor that share the
+  limit.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="trends"
+  title="Trends"
+  status="done"
+  goal="Compare every post against every time window at once, to see which ones are still being watched rather than which ones are simply old and big."
+  outcome="Every post against today, yesterday, 7 and 30 days, sortable, with unmeasured shown as a dash."
+>
+
+Post insights are lifetime counters that only climb, so the raw total says
+how big a post is, not whether anyone is still watching it. The table ranks
+on the day-over-day gain the agent computes instead.
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/trends.webp"
+  alt="Trends table listing posts with thumbnails and columns for today, yesterday, 7 days, 30 days and total, sorted by 7 days, with dashes for unmeasured values and asterisks on partial windows"
+  caption="Trends, sorted by the last 7 days. A dash means not measured, never zero; an asterisk marks a window that covered fewer days than it names. Fictional data."
+/>
+
+- **Today** is only answerable for posts sampled more than once a day, and
+  is counted from the local midnight, not UTC.
+- **A window ends at a missing day** instead of being voided, so one gap
+  does not blank a whole column.
+
+</Phase>
+
+<Phase
+  id="comment-handling"
+  title="Comment handling"
+  status="done"
+  goal="Review the agent's analysis of each new comment and act on it from any device, without the website and the tablet disagreeing about what is left to do."
+  outcome="Reply, hide, delete or acknowledge from the browser, and the tablet's to-do list clears too."
+>
+
+Comments opens on **To handle**: analyses with no recorded action, grouped
+by post. Each row shows the AI's suggested action, sentiment, reply score
+and summary, with the suggested action highlighted. Reply opens the draft
+for editing, and every write asks for confirmation.
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/to-handle.webp"
+  alt="A post card with two comments: a question tagged reply with a 92% score and a highlighted Reply button, and a praise comment with its suggested reply open in an editable text box above a Publish reply button"
+  caption="To handle: the AI suggests, a person edits and publishes. Fictional account and comments."
+/>
+
+Actions follow the tablet's write-then-report order. The Instagram write
+happens first, through the agent's proxy, and only a confirmed result is
+recorded. The two failures stay separate:
+
+| Failure | What happened | Retry |
+|---|---|---|
+| Instagram failure | Nothing changed on Instagram | Safe to retry the whole action |
+| Recording failure | Instagram succeeded, the record did not | Retry only the recording, never the post |
+
+The list re-syncs every 30 seconds and when the tab regains focus. A sync
+only reconciles the first page it fetched, so comments loaded with "Load
+more" and a reply being typed survive it.
+
+</Phase>
+
+</PhaseLedger>
+
+## Tech stack
+
+<TechStack notes={frontmatter.technologyNotes} />
+
+## Future improvements
+
+- **One password, no users.** Fine for two people; anything more needs real
+  accounts and per-user audit in the action table.
+- **Messages are read-only.** DMs are listed under Events but cannot be
+  answered from here yet.
+- **Concurrency is capped client-side.** The real fix is raising the AWS
+  Lambda quota, which is a support request rather than a code change.

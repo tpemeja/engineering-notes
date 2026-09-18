@@ -1,0 +1,329 @@
+---
+title: 'Instagram Agent'
+description: 'Serverless AWS backend for one Instagram Creator account: it ingests Meta webhooks, drafts replies to comments with an LLM, polls post insights on an age-decaying schedule, and serves it all through one API.'
+status: active
+startDate: 2026-08-17
+technologies:
+  [
+    'Python',
+    'FastAPI',
+    'AWS Lambda',
+    'DynamoDB',
+    'Aurora Serverless v2',
+    'Gemini',
+    'Terraform',
+  ]
+technologyNotes:
+  - name: 'Python'
+    context: 'All four Lambdas, the operator scripts and the tests, strictly typed with mypy.'
+  - name: 'FastAPI'
+    context: 'The management API: metrics, comments, analyses, the action audit trail and the Instagram proxy.'
+  - name: 'AWS Lambda'
+    context: 'Four functions (webhook, processor, poller, query API), each packaged with only its own dependencies, on arm64.'
+  - name: 'SQS'
+    context: 'Decouples webhook ingestion from analysis, with a dead-letter queue and per-message batch failures.'
+  - name: 'DynamoDB'
+    context: 'Event metadata and idempotency claims, plus dense metric samples (90-day TTL) and the due-gate the poller reads first.'
+  - name: 'Aurora Serverless v2'
+    context: 'Postgres for analyses, actions and one immutable row per day, reached only through the RDS Data API and auto-pausing to zero.'
+  - name: 'S3'
+    context: 'Raw webhook payloads and a daily bundle of raw Graph responses, kept because insights cannot be fetched again later.'
+  - name: 'Gemini'
+    context: 'Structured-output comment analysis on Gemini Flash-Lite: summary, sentiment, intent, scores and a draft reply.'
+  - name: 'Terraform'
+    context: 'The whole stack, deployed from GitHub Actions through an OIDC role scoped to this project.'
+  - name: 'pytest + moto'
+    context: '343 tests; the full webhook to SQS to processor to API path runs in-process against mocked AWS.'
+highlights:
+  - headline: '~$2/month poller'
+    detail: 'A DynamoDB due-gate keeps idle ticks from waking Aurora, which would otherwise cost about $44 a month.'
+  - headline: 'AI drafts, a human sends'
+    detail: 'The LLM only suggests an action and a reply. Nothing reaches Instagram without someone confirming it.'
+  - headline: 'Token never leaves AWS'
+    detail: 'The poller is the only identity that rotates it; clients act through five scoped, audited proxy routes.'
+  - headline: 'Silent API failures mapped'
+    detail: 'Every Graph metric was checked against the live API first, since wrong calls return HTTP 200 with no data.'
+relatedNotesSlugs: ['instagram-webhooks-vs-polling', 'meta-graph-api-live-mode-comments']
+order: 15
+---
+
+import Callout from '../../components/content/Callout.astro';
+import PhaseLedger from '../../components/content/PhaseLedger.astro';
+import Phase from '../../components/content/Phase.astro';
+import TechStack from '../../components/content/TechStack.astro';
+import Screenshot from '../../components/content/Screenshot.astro';
+import DecisionTable from '../../components/content/DecisionTable.astro';
+import BranchDiagram from '../../components/content/BranchDiagram.astro';
+import ObjectDiagram from '../../components/content/ObjectDiagram.astro';
+
+## Overview
+
+The backend behind my wife's Instagram Creator account. It started as a way
+to stop the [Instagram Insight](/projects/instagram-insight/) tablet from being the
+only place the account's history lived, and grew into the one service
+everything else talks to.
+
+It does four things: it receives Meta's webhooks for comments and messages,
+asks an LLM what each comment needs and drafts a reply, polls post and
+account insights on a schedule, and exposes all of it through one API. The
+tablet and the [Instagram Dashboard](/projects/instagram-dashboard/) website
+are both clients of it. Everything scales to zero, so it costs close to
+nothing when nothing is happening.
+
+<BranchDiagram
+  source={{ name: 'Instagram / Meta', detail: 'pushes webhooks, answers Graph API calls' }}
+  branchLabel="two independent paths, sharing storage but no code"
+  branches={[
+    { name: 'Webhook → SQS → Processor', detail: 'what just happened: comments, messages, LLM analysis' },
+    { name: 'EventBridge → Poller', detail: 'what every post looks like now: insights, followers, audience' },
+  ]}
+  mergeLabel="read out-of-band, never on either critical path"
+  merge={{ name: 'Query API', detail: 'serves the tablet and the dashboard, and proxies writes back to Instagram' }}
+/>
+
+Screenshots on this page come from the dashboard and use a fictional account.
+
+## Problem
+
+- **The history lived on one tablet.** Instagram only ever exposes a post's
+  current totals, so the daily snapshots the tablet kept were the only copy
+  that would ever exist. A factory reset would lose them for good.
+- **Meta's API fails silently.** The wrong parameter shape returns HTTP 200
+  with an empty `data: []`, never an error. A schema built on a guess would
+  store nothing and look healthy.
+- **Scale-to-zero fights a five-minute schedule.** Aurora Serverless bills
+  about five minutes every time it wakes. A poller that opened Postgres on
+  every tick would keep it awake all month.
+- **Replies are published under someone else's name.** An LLM can suggest,
+  but a wrong reply or a wrong delete on a real account cannot be undone.
+- **The token is hard to replace.** Losing it means a browser consent flow
+  that needs the account owner in person, so exactly one thing may rotate it.
+
+## Approach
+
+Analysis and acting are kept apart everywhere. The processor writes a
+suggested action and a draft, and nothing in this repo acts on it by itself.
+A write to Instagram only happens when a client calls the proxy after a
+person confirms. The same split runs through the data: a decision is always
+reproducible from what was stored (prompt version, policy version, raw
+response), and "not measured" is `null`, never `0`, so a gap never reads
+as a real zero.
+
+I verified every Graph API behavior against the live account before
+designing a table around it, with a spike script whose raw responses are
+checked in as test fixtures.
+
+## What I built
+
+<PhaseLedger>
+
+<Phase
+  id="webhook-ingestion"
+  title="Webhook ingestion"
+  status="done"
+  goal="Accept Meta's webhooks for comments, messages and mentions without ever losing one, while staying fast and cheap at the edge."
+  outcome="Every webhook is signature-checked, stored twice and queued, or answered with a 500 so Meta retries."
+>
+
+The webhook Lambda sits behind a bare Function URL and does one job. It
+never runs FastAPI, so ingestion carries none of the API's cold-start cost.
+The order of writes is what makes it safe to retry:
+
+1. Check the `X-Hub-Signature-256` HMAC, rejecting forgeries with `403`.
+2. Write the raw payload to S3 (safe to repeat).
+3. Claim the event in DynamoDB with `attribute_not_exists(event_id)`.
+4. Send a small reference to SQS. If that fails, delete the claim and
+   return `500`.
+
+<Callout variant="lesson" title="An idempotency claim has to be rolled back if the next step fails">
+  Without step 4's rollback, a failed SQS send leaves a claimed event behind.
+  Meta's retry then looks like a duplicate, gets a `200`, and the event never
+  reaches the queue. The handler only returns `200` once the event is both
+  stored and queued.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="comment-analysis"
+  title="Comment analysis"
+  status="done"
+  goal="Tell, for every new comment, whether it needs an answer, and draft one, in a way that can be explained and retuned later."
+  outcome="Each comment gets a summary, sentiment, draft reply and an action you can rebuild from stored versions."
+>
+
+The processor fetches the post caption, then calls Gemini with a structured
+output schema. The model returns scores and a suggestion, but the action the
+system records comes from a separate, versioned policy in code. Thresholds
+can change as a new `policy_version` without calling the LLM again.
+
+<ObjectDiagram
+  arrowLabel="deterministic, versioned"
+  nodes={[
+    {
+      name: 'Gemini output (prompt v2)',
+      fields: [
+        { name: 'summary, topic, reason', detail: 'always in English, for the operator' },
+        { name: 'suggested_reply', detail: "in the commenter's language, since it gets published" },
+        { name: 'requires_answer, reply_score, ...', detail: 'scores between 0 and 1' },
+      ],
+    },
+    {
+      name: 'policy v1',
+      fields: [
+        { name: 'reply', detail: 'reply_score ≥ 0.6 and requires_answer ≥ 0.5' },
+        { name: 'like', detail: 'encourages conversation and adds value' },
+        { name: 'ignore', detail: 'everything else; hide and delete stay human-only' },
+      ],
+    },
+  ]}
+/>
+
+A failed hydration or LLM call is stored as an `error` row with a code
+instead of being retried through SQS, since retrying against an expired
+token just burns invocations. `scripts/reprocess_events.py` re-drives them by
+error code once the cause is fixed.
+
+<Screenshot
+  src="/images/projects/instagram-agent/sentiment.webp"
+  alt="Stacked daily bar chart of analysed comments split into positive, neutral and negative, with a summary line of 76 analysed comments"
+  caption="The stored analyses, read back as a daily sentiment trend. Fictional data."
+/>
+
+</Phase>
+
+<Phase
+  id="metrics-poller"
+  title="Metrics poller"
+  status="done"
+  goal="Collect post, follower and account insights durably, often enough to measure a fresh Reel by the hour, without paying to keep a database awake."
+  outcome="One five-minute tick polls whatever is due, and idle ticks never wake Aurora: about $2 a month."
+>
+
+There is one EventBridge rule and no tiers. Each tick asks every subject
+whether it is overdue, using fetch clocks stored on the rows themselves, so
+a missed tick heals itself.
+
+| What | Interval |
+|---|---|
+| Media list (new post?) | 15 min |
+| Follower count | 5 min while a post is under 24h old, else 30 min |
+| Post insights | 5 min under 6h, then 15 min, 1h, 6h up to a month, then daily |
+| Account insights + daily roll-up | 24h |
+
+The first thing a tick does is read one DynamoDB item holding the earliest
+moment anything is due. Most ticks stop there (~130 ms). Dense samples go to
+DynamoDB, which has no idle charge, and Postgres is written once a day.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Who collects',
+      chose: 'AWS polls on a schedule',
+      insteadOf: 'The tablet pushes what it fetched',
+      why: 'A tablet that sleeps or gets wiped cannot be the source of truth, and the end goal was a tablet with no Instagram token at all.',
+    },
+    {
+      label: 'Gate fails',
+      chose: 'Fail open: a missing gate means "check properly"',
+      insteadOf: 'Fail closed',
+      why: 'The worst case becomes one wasted database wake, never a poller that silently stops collecting.',
+    },
+    {
+      label: 'Post insights floor',
+      chose: 'Daily, never slower',
+      insteadOf: 'Decay further for old posts',
+      why: 'A post read less than daily copies the same value into several daily rows, and its day-over-day gain turns into a fake sawtooth.',
+    },
+  ]}
+/>
+
+<Callout variant="warning" title="Meta's reporting day is not a UTC day">
+  Account insights come back with `end_time` at `07:00:00+0000`, labelled by
+  the day the window started. Filing them under UTC dates shifted every
+  point by a day. Account rows are now filed under Meta's reporting day, two
+  days back so Meta has finished counting.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="instagram-proxy"
+  title="Token ownership and proxy"
+  status="done"
+  goal="Take the long-lived Instagram token off the tablet, without breaking the tablet's comment logic or letting a read-only client moderate."
+  outcome="The token lives only in AWS, and clients reply, hide or delete through five scoped proxy routes."
+>
+
+The poller is the only identity with `PutSecretValue`, and refreshes the
+token when fewer than 10 days remain. The token is read at runtime and never
+cached across invocations. A CloudWatch alarm on `TokenDaysRemaining` treats
+missing data as breaching, so a poller that stops running also pages.
+
+- **Lease, not reserved concurrency.** The account's Lambda quota is 10, and
+  AWS refuses any reservation below that floor, so exclusivity comes from a
+  conditional DynamoDB write that expires on its own.
+- **Meta's JSON passes through unchanged.** The tablet's comment threading
+  handles several undocumented Meta behaviors, and reshaping the payload
+  would have meant porting all of it during a cutover.
+- **JWT scopes.** The write routes need `instagram:write`. Tokens minted
+  before scopes existed still read everything and are refused only on
+  writes: a missing claim grants nothing.
+- **History import.** `scripts/import_tablet_history.py` loads the tablet's
+  daily snapshots tagged `source = 'tablet'`, and a real poll always wins
+  over an imported row for the same day.
+
+</Phase>
+
+<Phase
+  id="analytics-api"
+  title="Analytics API"
+  status="done"
+  goal="Answer questions the tablet never could, once metrics and comment analyses sit in the same database."
+  outcome="Posting slots, time to 80% reach, per-post daily gain and comment quality, each one API route."
+>
+
+The routes are shaped around resources, not screens, so a UI change never
+needs a backend change. Derived numbers are computed on the server so the
+tablet and the dashboard cannot drift apart.
+
+- `/metrics/timing` requires an explicit IANA `tz`. Buckets built on UTC
+  hours would answer "best time to post" for the wrong country.
+- `/metrics/velocity` reads the dense samples and returns `null` unless
+  sampling started before the post reached 80%, so it measures the post and
+  not when polling began.
+- `/metrics/media-daily` resolves `audience` per post (views for a Reel,
+  reach for a feed post), because asking for either column drops the other
+  kind of post without an error.
+- `/metrics/comment-quality` returns a `coverage` block saying how many
+  analyses could be joined to a post, instead of quietly under-counting.
+
+<Screenshot
+  src="/images/projects/instagram-agent/timing.webp"
+  alt="Heatmap of average engagement rate by weekday and time of day, with afternoon and evening slots filled and night slots empty"
+  caption="/metrics/timing rendered by the dashboard: engagement rate per publication slot in the account's own time zone. Fictional data."
+/>
+
+<Screenshot
+  src="/images/projects/instagram-agent/velocity.webp"
+  alt="Horizontal bars showing hours for each recent post to reach 80% of its eventual views, between about 15 and 40 hours"
+  caption="/metrics/velocity: hours for each post to reach 80% of its eventual audience. Fictional data."
+/>
+
+</Phase>
+
+</PhaseLedger>
+
+## Tech stack
+
+<TechStack notes={frontmatter.technologyNotes} />
+
+## Future improvements
+
+- **Liking comments.** It needs `graph.facebook.com` and Facebook Login for
+  Business, which this account does not use, so `like` stays a suggestion.
+- **Comment history before the webhook.** Analyses only cover comments the
+  webhook delivered. Older ones need the poller to own comments too.
+- **Per-story insights.** Stories are about 1% of this account's reach, and
+  no story was live during two verification runs, so the metric set is
+  still unverified.

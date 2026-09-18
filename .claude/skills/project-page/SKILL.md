@@ -105,7 +105,7 @@ Alongside the visuals, at most one `<Callout>` per phase.
 
 ### Where cut material goes
 
-- **Experiment logs, extra charts, parameter sweeps** go to the project's own repo. Name the path in prose the way `insta-insight` points at its `SETUP.md`.
+- **Experiment logs, extra charts, parameter sweeps** go to the project's own repo. Name the path in prose the way `instagram-insight` points at its `SETUP.md`.
 - **Transferable lessons** get promoted to `src/content/notes/` and wired through `relatedNotesSlugs`. A lesson that would teach someone who never touches this project belongs there rather than deleted.
 
 ## Prose rules

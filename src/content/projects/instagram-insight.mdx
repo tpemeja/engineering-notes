@@ -1,0 +1,325 @@
+---
+title: 'Instagram Insight'
+description: "Always-on Android tablet dashboard for my wife's Instagram Creator account: wake-triggered, kiosk-pinned, and now reading everything from the Instagram Agent instead of calling Meta itself."
+status: active
+startDate: 2026-08-07
+technologies:
+  [
+    'Kotlin',
+    'Jetpack Compose',
+    'Retrofit',
+    'WorkManager',
+  ]
+highlights:
+  - headline: '8.6s to 1.6s refresh'
+    detail: 'About 30 Graph API calls per wake became five calls to the agent, which has already collected everything.'
+  - headline: 'Kiosk dashboard'
+    detail: 'A double-tap wake lands on an auto-rotating six-page dashboard, pinned so nothing else is reachable.'
+  - headline: 'AI replies, human approved'
+    detail: 'Comments arrive with an AI summary and draft reply, and nothing is posted until someone confirms it.'
+  - headline: 'Undocumented API quirk'
+    detail: 'Traced silently empty comment responses to a Meta Live-mode requirement, written up as a note.'
+    href: '/notes/meta-graph-api-live-mode-comments/'
+technologyNotes:
+  - name: 'Kotlin'
+    context: 'App language throughout.'
+  - name: 'Jetpack Compose'
+    context: 'The six-page auto-rotating pager, the overlays (comments, strategy insights, compare dates) and the kiosk screen.'
+  - name: 'Retrofit'
+    context: "Typed calls to the Instagram Agent's management API, which also proxies comment reads and moderation."
+  - name: 'OkHttp'
+    context: 'HTTP client and logging interceptor under Retrofit.'
+  - name: 'kotlinx.serialization'
+    context: 'JSON models for every API response and every local cache.'
+  - name: 'Coil'
+    context: 'Post thumbnails on the dashboard tiles and in comment groups.'
+  - name: 'DataStore'
+    context: 'Local caches: dashboard, follower and post history, follower momentum, unseen comments.'
+  - name: 'EncryptedSharedPreferences'
+    context: 'Keystore-backed storage for the tokens, pinned to security-crypto 1.0.0.'
+  - name: 'WorkManager'
+    context: 'Two narrow, self-rescheduling job chains that deliberately break the wake-only rule (new-post polling, midnight snapshot).'
+relatedNotesSlugs: ['meta-graph-api-live-mode-comments']
+order: 20
+---
+
+import Callout from '../../components/content/Callout.astro';
+import PhaseLedger from '../../components/content/PhaseLedger.astro';
+import Phase from '../../components/content/Phase.astro';
+import TechStack from '../../components/content/TechStack.astro';
+import DecisionTable from '../../components/content/DecisionTable.astro';
+import Screenshot from '../../components/content/Screenshot.astro';
+
+## Overview
+
+<Screenshot
+  src="/images/projects/instagram-insight/dashboard.webp"
+  alt="Instagram Insight first page in landscape: follower count with today's change and 7-day reach, three Reel tiles below, and a bottom bar with auto-rotate, stay-on, strategy, compare and comments buttons, a flagged-comments badge and page dots"
+  caption="Page 1 of the pager: followers, 7-day reach and the latest posts, the glance-while-walking-past view the app is built around. All screenshots use a fictional account."
+/>
+
+A single-purpose Android app for a tablet mounted where my wife can glance
+at her Instagram Creator account without opening Instagram and digging
+through its Insights screens. It wakes on a double-tap, refreshes, and
+auto-rotates through six pages: followers, growth, the latest post, totals,
+audience and history graphs. It is kiosk-pinned, so nothing else on the
+tablet is reachable.
+
+It started with no backend at all, calling the Graph API directly and
+refreshing its own token. It now reads everything from the
+[Instagram Agent](/projects/instagram-agent/), which collects the data in
+AWS, and shares its comment to-do list with the
+[Instagram Dashboard](/projects/instagram-dashboard/) website.
+
+## Problem
+
+- **A passive, always-current view, not another app to open.** The point is
+  a glance while walking past, not a session inside Instagram.
+- **The tablet is not always plugged in.** Anything that runs in the
+  background costs battery for updates nobody is looking at.
+- **Meta's setup and docs don't match reality.** Getting comments to return
+  anything needed a tester invite accepted by the account owner, a scope
+  added later, and the app switched to Live mode, none of which errors when
+  missing. `SETUP.md` in the repo has the full walkthrough.
+- **Android kiosk behavior isn't obvious.** Screen Pinning, show-when-locked
+  and turn-screen-on had to be combined by trial and error.
+- **A device on a wall is a bad place for a write-scoped token.** A lost
+  tablet leaked 60 days of full account access, with no way to revoke it
+  short of redoing the consent flow.
+
+## Approach
+
+The app runs unattended on a device nobody is debugging, so every failure
+has to degrade gracefully. A failed refresh never clears a good cache: the
+dashboard always shows the last successful fetch rather than a blank
+screen. Anything that is not guaranteed to work gets its own call and its
+own try/catch, never batched with calls that are. And the refresh only runs
+on wake, with two narrow, self-terminating background jobs as the only
+exceptions.
+
+## What I built
+
+<PhaseLedger>
+
+<Phase
+  id="dashboard-core"
+  title="Dashboard and kiosk mode"
+  status="done"
+  goal="Get from a double-tap on a sleeping tablet to a current dashboard, with no lock screen and no background polling draining the battery."
+  outcome="A double-tap wake lands on a six-page auto-rotating dashboard, refreshed on wake and cached for failures."
+>
+
+`refreshDashboard()` is the single entry point, called from `onResume()` on
+every wake and cold launch. It writes to `DashboardCache`, and returns a
+failure without ever deleting what is already cached.
+
+Kiosk mode is three settings working together:
+
+- `setShowWhenLocked(true)` and `setTurnScreenOn(true)` in `onCreate`, so
+  the wake skips the lock screen.
+- Android Screen Pinning, which does not survive a reboot, so an adb
+  shortcut re-pins and relaunches the app.
+- A token pushed over adb through `onNewIntent`, since a pinned, running
+  activity never goes through `onCreate` again.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Refresh trigger',
+      chose: 'Only on wake (onResume)',
+      insteadOf: 'A background polling job',
+      why: "The tablet isn't always plugged in; polling would drain battery for updates nobody sees between wakes.",
+    },
+    {
+      label: 'Token storage',
+      chose: 'EncryptedSharedPreferences pinned to security-crypto 1.0.0',
+      insteadOf: 'The 1.1.x alpha MasterKey builder API',
+      why: 'Google deprecated the later alphas for reliability issues; 1.0.0 is stable and enough for a couple of stored values.',
+    },
+  ]}
+/>
+
+</Phase>
+
+<Phase
+  id="post-insights"
+  title="Latest post and post insights"
+  status="done"
+  goal="Show how the newest post is doing in its first hours and days, with the richer metrics Instagram's own app buries (saves, shares, watch time, skip rate)."
+  outcome="A latest-post page and tap-through detail pager, with each unreliable metric fetched on its own."
+>
+
+<Screenshot
+  src="/images/projects/instagram-insight/latest-post.webp"
+  alt="Latest post page: the post thumbnail and caption, then cards for views, likes, comments, saved, shares, interactions and engagement, each with its share of views"
+  caption="The latest post's own page: views, likes and comments, then saves, shares, interactions and engagement. Fictional data."
+/>
+
+<Callout variant="lesson" title="One unsupported metric in a combined call zeroes out the whole response">
+  Batching `reels_skip_rate` or `profile_activity` into the same `/insights`
+  call as reach, saved and shares silently zeroed all of them. Each newer or
+  estimated metric got its own call and its own try/catch, so one
+  unsupported field could not take the rest down with it. The agent's poller
+  now applies the same rule and remembers which metrics a post rejects.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="follower-reach-history"
+  title="Growth, history and audience"
+  status="done"
+  goal="Answer 'how are we growing' when Meta has no follower history and only exposes a post's current totals."
+  outcome="Daily snapshots build follower and per-post history locally; reach and audience come from Meta."
+>
+
+Follower count has no historical API, so the app stored its own daily
+snapshots (`FollowerHistoryCache`), and the same for each post
+(`PostMetricsHistoryCache`). Reach does have a real time series, so it was
+backfilled 30 days in one call. Those local snapshots are the only copy of
+that history anywhere, which is why they were later exported and imported
+into the agent.
+
+<Screenshot
+  src="/images/projects/instagram-insight/graphs.webp"
+  alt="Graphs page with three cards: a follower growth line over 41 recorded days, daily follower change as green and red bars, and a 30-day reach line"
+  caption="History graphs: follower growth, daily change and 30-day reach. Fictional data."
+/>
+
+<Screenshot
+  src="/images/projects/instagram-insight/audience.webp"
+  alt="Audience page with age brackets from 18-24 to 65+ as horizontal bars, then top countries with flag emoji"
+  caption="Audience: followers by age and country. Country flags are built from the ISO code's letters, with no lookup table. Fictional data."
+/>
+
+</Phase>
+
+<Phase
+  id="background-refresh-exceptions"
+  title="Background refresh exceptions"
+  status="done"
+  goal="Get two numbers the wake-only design cannot: a fresh post's first-hours trend, and a real midnight baseline for 'today so far'."
+  outcome="Two self-rescheduling jobs: 5-minute polling for a new post's first day, and a midnight snapshot."
+>
+
+<Screenshot
+  src="/images/projects/instagram-insight/growth.webp"
+  alt="Growth page with rows of cards for today so far, yesterday and last 7 days, each showing followers, likes and views gained"
+  caption="Growth: 'today so far' is only accurate because of the midnight job below. Fictional data."
+/>
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'New-post tracking',
+      chose: 'A 5-minute self-rescheduling chain of one-time jobs',
+      insteadOf: 'A PeriodicWorkRequest',
+      why: "WorkManager's periodic floor is 15 minutes, too coarse for a first-24h trend. Re-reading which post is latest on every run also picks up a post published mid-window.",
+    },
+    {
+      label: "Growth page's baseline",
+      chose: 'A one-time job pinned to local midnight',
+      insteadOf: 'Whatever the first wake of the day sees',
+      why: 'A wake-only baseline is hours late, and missing entirely on a day the tablet is never woken.',
+    },
+  ]}
+/>
+
+</Phase>
+
+<Phase
+  id="compare-dates"
+  title="Strategy insights and compare dates"
+  status="done"
+  goal="Go beyond the glance for the occasional deliberate question: which format works, when to post, and what changed between two dates."
+  outcome="Two overlays: engagement by format and time slot, and account plus per-post change between any two dates."
+>
+
+<Screenshot
+  src="/images/projects/instagram-insight/compare-dates.webp"
+  alt="Compare dates overlay with from and to date pickers, account cards for followers, total likes and total views showing the change between the dates, and a per-post comparison table"
+  caption="Compare dates: account totals and each post between two picked days, from the stored snapshots. Fictional data."
+/>
+
+Both are overlays opened from the bottom bar rather than pages in the pager.
+Unmounting the pager stops auto-rotation for free, and a detailed table is
+not something to rotate past every few seconds.
+
+</Phase>
+
+<Phase
+  id="comment-surfacing"
+  title="Comments with AI review"
+  status="done"
+  goal="Surface new comments on the tablet, then act on them (reply, hide, delete, acknowledge) with the agent's analysis to help, without ever posting something nobody approved."
+  outcome="Unseen comments grouped by post, each with an AI summary and draft reply that a person confirms."
+>
+
+<Screenshot
+  src="/images/projects/instagram-insight/comments.webp"
+  alt="Comments overlay: a post group with a reply thread quoting the account's own answer, a comment tagged like with its AI summary, and a question tagged reply with its summary"
+  caption="Comments grouped by post, threads quoting the parent, and the agent's suggested action and summary on each. Fictional account and comments."
+/>
+
+Every write follows **write-then-report**: post to Instagram first, then
+record the action with the agent only once Instagram confirms. A failed
+Instagram call is safe to retry; a failed recording after a successful post
+only retries the recording. Actions go to the same table the dashboard
+website writes, so a comment handled on either one leaves both lists.
+
+<Callout variant="warning" title="The comments endpoint needs the app in Live mode, not just a valid scope and tester">
+  With a tester invite accepted and `instagram_business_manage_comments`
+  granted, `GET /{media-id}/comments` still returned an empty `data: []`, no
+  error, while the Meta app was in Development mode. Nothing in the endpoint
+  docs mentions it. Switching the app to Live is what made comments come
+  back.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="agent-cutover"
+  title="Cutover to the agent"
+  status="done"
+  goal="Stop calling Meta from the tablet: make refreshes faster and take the write-scoped Instagram token off a device mounted on a wall."
+  outcome="A wake refresh went from ~30 Graph calls in 8.6s to 5 agent calls in 1.6s."
+>
+
+It happened in two steps, each small enough to roll back:
+
+1. **Comments and moderation through the proxy.** The agent passes Meta's
+   JSON through unchanged, so the tablet's comment threading (parent
+   resolution, self-detection, deduplicating replies Meta returns twice)
+   kept working untouched.
+2. **Every metric from the agent.** Posts, post detail, followers, reach and
+   audience come from its `/metrics` routes, mapped onto the existing UI
+   models, so no screen changed.
+
+| | Before | After |
+|---|---|---|
+| Requests per wake | ~30 to the Graph API | 5 to the agent |
+| Refresh time | 8.6s | 1.6s warm |
+| Metrics on screen | after the comment fetch (~25s) | before it starts |
+| Instagram token | sent on every call, refreshed on-device | no longer sent or refreshed |
+
+<Callout variant="decision" title="Freshness traded for speed">
+  A figure is now as recent as the agent's last poll of that post: every 5
+  minutes in its first 6 hours, slower as it ages. Reach stops at the last
+  day Meta has finished counting. For a glance dashboard that is the right
+  trade.
+</Callout>
+
+</Phase>
+
+</PhaseLedger>
+
+## Tech stack
+
+<TechStack notes={frontmatter.technologyNotes} />
+
+## Future improvements
+
+- **Retire the Instagram token entirely.** It is no longer sent anywhere,
+  but it still acts as the "is this tablet set up" check.
+- **Survive a reboot without adb.** Screen Pinning has to be re-applied by
+  hand after a restart; a device-owner kiosk would remove that step.
