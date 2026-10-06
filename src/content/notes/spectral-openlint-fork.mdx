@@ -1,0 +1,98 @@
+---
+title: 'OpenLint: a community fork of Spectral, with a spec for its rulesets'
+category: 'APIs'
+tags: ['OpenAPI', 'Spectral', 'OpenLint', 'Linting', 'API governance']
+lastUpdated: 2026-10-04
+status: evergreen
+relatedNotes: []
+---
+import Callout from '../../components/content/Callout.astro';
+
+## Core concept
+
+Spectral is the linter most OpenAPI tooling reaches for, and its ruleset
+format is how a lot of teams write down their API style guide. The catch is
+that the format was never specified. It exists as configuration for one CLI,
+described by internal meta-schemas and versioned with the tool. If the linter
+stops moving, the rules you wrote in its format stop moving with it.
+
+[OpenLint](https://github.com/openlint) is a community fork of Spectral, run in
+the open as an [API Commons](https://apicommons.org) effort, that goes after
+exactly that. It splits the work into three pieces that don't belong to any
+one tool or vendor:
+
+- **A specification** for rulesets, that a linter can claim conformance with.
+- **A toolbox**: the linter as a library, a CLI, a CI gate, an IDE
+  integration.
+- **A community** with open governance and an Open Collective to fund it.
+
+## Where it stands (September 2026)
+
+It's brand new. The GitHub org was created on 17 September 2026, the name came
+out of a community vote the same month, and the first roadmap draft is due at
+the end of September. Nothing is released yet.
+
+The concrete work so far is in two API Commons repos under the earlier name
+Spotlight, and the spec is moving to the OpenLint org:
+
+| Repo | What it is |
+|---|---|
+| `api-commons/spotlight-spec` | Spectral's ruleset format as it's implemented today, written down without extensions, with a JSON Schema at `schema/v1/spectral-ruleset.schema.json` |
+| `api-commons/spotlight-tools` | The reference implementation, an API Commons build of Spectral |
+
+Spectral itself isn't dead: it shipped 6.16.3 in August 2026. But before
+6.16.1 in June 2026, the previous release was 6.15.0 in April 2025, fourteen
+months earlier. That's a good example of why I'd rather my rules didn't depend
+on one CLI's release cadence.
+
+## Why I'm watching it
+
+[FastSpec](/projects/fastspec) lints specs with Spectral, and the rulesets its
+users write are stored in Spectral's format: rules built in the form become
+generated YAML, and there's a raw YAML override. The rules are the durable
+part; the engine is replaceable. The backend already treats it that way.
+Everything goes through a `SpectralClient` interface with one method,
+`lint(spec_json, ruleset_yaml) -> dict`, and the default implementation just
+shells out:
+
+```bash
+spectral lint spec.json --ruleset ruleset.yaml --format json --quiet
+```
+
+If OpenLint ships a CLI that reads the same rulesets and prints the same JSON,
+switching is a new client class and a Dockerfile change. If the output
+differs, it's a small adapter in the same place.
+
+Two things are useful even before a release:
+
+- **The JSON Schema.** FastSpec only checks that a raw YAML ruleset parses and
+  doesn't use `functions`, `functionsDir` or a non-`spectral:` `extends`.
+  Validating it against the published schema at save time would catch a
+  malformed rule before the lint run does.
+- **A conformance suite, once there is one**, to see whether the Spotlight
+  build, [vacuum](https://github.com/daveshanley/vacuum) and OpenLint really
+  agree on the same rulesets.
+
+## What to check when it ships
+
+- Is the CLI a drop-in for `spectral lint`: same flags, same `--format json`
+  output?
+- Do `extends: spectral:oas` and the built-in function names stay the same?
+- How does it handle custom JavaScript functions? FastSpec refuses them
+  anyway, so a stricter model would be welcome rather than a blocker.
+
+<Callout variant="decision" title="Until then: pin Spectral and keep the seam">
+  FastSpec's Lambda image used to install `@stoplight/spectral-cli` with no
+  version, so every build took whatever was newest. Both of its images now pin
+  it to 6.16.3, and their builds fail if the CLI isn't where the backend looks
+  for it. Lint results stay the same from one build to the next, and a future
+  move to OpenLint is one deliberate change instead of something that slips in
+  with an unrelated deploy.
+</Callout>
+
+## Rule of thumb
+
+Treat lint rules as an artifact of their own, not as one tool's config. Keep
+them in a format more than one engine can read, call the engine through a
+small interface, and pin its version. Then a fork like OpenLint is an option
+to evaluate, not a migration you're forced into.

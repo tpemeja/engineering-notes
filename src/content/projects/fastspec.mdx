@@ -1,0 +1,597 @@
+---
+title: 'FastSpec'
+description: 'Open-source app for writing, versioning, diffing and linting OpenAPI specs, with an MCP server so AI agents can work with them. FastAPI and Vue, self-hosted from one Docker image or serverless on AWS for cents a month.'
+status: paused
+startDate: 2025-11-09
+technologies:
+  [
+    'Python',
+    'FastAPI',
+    'Vue',
+    'PostgreSQL',
+    'Neon',
+    'SQLite',
+    'Spectral',
+    'FastMCP',
+    'Docker',
+    'AWS Lambda',
+    'AWS CDK',
+  ]
+technologyNotes:
+  - name: 'Python'
+    context: 'The backend, the MCP server and a small CLI that migrates and serves, or moves single-user data to a signed-in account.'
+  - name: 'FastAPI'
+    context: 'Specs, versions, lint and auth routers, split into routers, services and repositories. In the Docker image, the MCP server and the built SPA sit behind the same app, routed by a small front door.'
+  - name: 'SQLAlchemy + Alembic'
+    context: 'ORM and migrations, written to run on both SQLite and Postgres. They run on container start, or inside the backend Lambda on deploy.'
+  - name: 'PostgreSQL'
+    context: 'For teams through docker-compose, or any managed Postgres passed as DATABASE_URL. The hosted version runs on Neon.'
+  - name: 'Neon'
+    context: 'Serverless Postgres for the hosted version, on the free plan in AWS Singapore (0.5 GB, 100 compute-hours a month). It scales to zero after 5 idle minutes, resumes in under a second, and pauses rather than bills when over its limits.'
+  - name: 'SQLite'
+    context: 'The zero-configuration default in the Docker image: one file under /data, with foreign keys, WAL and a busy timeout turned on.'
+  - name: 'OpenID Connect'
+    context: 'Authorization Code with PKCE against any provider that publishes discovery metadata. Google is just one issuer URL.'
+  - name: 'Spectral'
+    context: 'The OpenAPI linter, pinned to 6.16.3 in both images and run per request against a generated ruleset file.'
+  - name: 'FastMCP'
+    context: 'Eleven tools to read, create, version, compare, validate and lint specs, each gated by the API key''s actions. Stateless, one handler per request.'
+  - name: 'Vue 3 + PrimeVue'
+    context: 'The single-page editor, with Pinia for auth state and composables holding the form editor''s logic.'
+  - name: 'Monaco + Swagger UI'
+    context: 'The YAML or JSON code view and the live preview, both over the same spec object as the form. Swagger UI is bundled, not loaded from a CDN.'
+  - name: 'Docker'
+    context: 'One image for linux/amd64 and linux/arm64 on GHCR, serving the app, API and MCP server on one port.'
+  - name: 'AWS Lambda'
+    context: 'The backend as a Docker-image Lambda behind a Function URL, adapted with Mangum; secrets fetched from SSM at cold start.'
+  - name: 'S3 + CloudFront'
+    context: 'One distribution routing to the SPA bucket, the landing-page bucket and the Lambda.'
+  - name: 'AWS CDK'
+    context: 'Three TypeScript stacks (backend Lambda, certificate, frontend), covered by 51 assertion tests and deployable into the floci emulator with the same code.'
+  - name: 'GitHub Actions'
+    context: 'Tests on SQLite and Postgres, smoke tests of both images, gitleaks, releases to GHCR, the AWS deploy and a daily database usage check.'
+  - name: 'pytest + Vitest + Jest'
+    context: 'Backend, frontend and infra suites of 247, 351 and 51 tests. Five backend tests need a real Postgres, which CI provides.'
+githubUrl: 'https://github.com/Kaseovo/FastSpec'
+websiteUrl: 'https://fastspec.kaseovo.com'
+highlights:
+  - headline: 'Open source under AGPL-3.0'
+    detail: 'Public repo with its history kept and scrubbed, released as a multi-arch Docker image on GHCR.'
+    href: 'https://github.com/Kaseovo/FastSpec'
+  - headline: '$17 to $0.03 a month idle'
+    detail: 'The hosted database moved from an RDS instance stopped when idle to Neon''s free plan, which scales to zero and wakes in under a second.'
+  - headline: '11 MCP tools for AI agents'
+    detail: 'Claude Code or Cursor read, write, version, compare and lint specs, with an API key scoped per action.'
+  - headline: 'One docker run to try it'
+    detail: 'One image serves the app, API and MCP server on one port, on SQLite with no sign-in, and migrates itself on start.'
+relatedNotesSlugs: ['spectral-openlint-fork']
+order: 25
+---
+
+import Callout from '../../components/content/Callout.astro';
+import PhaseLedger from '../../components/content/PhaseLedger.astro';
+import Phase from '../../components/content/Phase.astro';
+import TechStack from '../../components/content/TechStack.astro';
+import Screenshot from '../../components/content/Screenshot.astro';
+import DecisionTable from '../../components/content/DecisionTable.astro';
+import ObjectDiagram from '../../components/content/ObjectDiagram.astro';
+
+## Overview
+
+FastSpec is a web app for writing and maintaining OpenAPI specs. You build a
+spec in a form or as YAML or JSON, preview it in Swagger UI, save it as named
+versions, diff any two of them, and lint it with Spectral against your own
+house rules. An MCP server lets AI agents such as Claude Code or Cursor read,
+write, version and lint your specs with a scoped API key.
+
+It is the spec-first counterpart to [FastMock](/projects/fastmock), which mocks
+an API from the models a FastAPI app already declares. FastSpec has been open
+source (AGPL-3.0) since v0.1.0 on 27 September 2026. It runs from one Docker
+image, or as a hosted version at
+[fastspec.kaseovo.com](https://fastspec.kaseovo.com). Every screenshot below
+comes from the app running locally against fictional specs.
+
+Work is paused since v0.3.0 on 2 October 2026. The hosted version keeps
+running, and Dependabot still opens a pull request per ecosystem each month.
+
+## Problem
+
+- **OpenAPI is easy to get subtly wrong by hand.** Path parameters, `$ref`s and
+  array item schemas all have to line up, and Swagger UI often fails quietly
+  when they don't.
+- **Reviewers need changes in API terms.** "An endpoint was removed" and "a
+  schema field became required" matter; a JSON text diff buries them.
+- **Custom lint rules are a code execution risk.** Spectral rulesets can load
+  JavaScript from disk and fetch other rulesets from URLs, so accepting them
+  from users as-is means running their code on the server.
+- **AI clients need their own credential.** Handing an assistant the user's
+  web session is not acceptable; access has to be scoped and revocable.
+- **Trying it has to take one command.** Until September 2026, running it
+  locally meant an AWS emulator, the AWS CDK and a Google OAuth client of your
+  own.
+- **It is a side project.** The AWS bill has to be close to zero when nobody
+  is using it, without giving up a real managed Postgres.
+
+## Approach
+
+I built FastSpec with AI coding agents in the loop (Claude Code, and GitHub's
+Copilot agent for some issues), so the repo is written to be read by an agent
+as much as by me. `AGENTS.md` lists the test commands and what the common
+failures mean, `CONTEXT.md` is a glossary of domain terms (Path Parameter
+Token, Lint Ruleset, Spec Version Mode), and every architecture decision is an
+ADR. Once the feature set was in place I ran a full-repo review and worked
+through it.
+
+The rule the codebase follows throughout: **the why lives next to the code.**
+Module docstrings point at the ADR or review section that explains them.
+`database.py`, for example, cites ADR-0009 for why the hosted database's quota
+errors get their own message instead of "try again shortly". A deliberate
+trade-off then can't get "fixed" by accident, by me or by an agent.
+
+Going open source followed the same habit. `docs/ROADMAP.md` records each
+decision with its reason (license, sign-in, database, what to do with the git
+history), ticks off the work as it lands, and says what keeps running while
+the project is paused. Every release has a changelog entry.
+
+## What I built
+
+<PhaseLedger>
+
+<Phase
+  id="form-editor"
+  title="Form editor"
+  status="done"
+  goal="Let someone write a complete OpenAPI spec without knowing its JSON shape by heart, with the code and a live Swagger preview one click away."
+  outcome="A full spec can be built without touching JSON, and path parameters can't drift from the path string."
+>
+
+The editor is three views over one spec object: a form, the code in Monaco
+(YAML or JSON), and a Swagger UI preview. Most of the work went into the form.
+Info, servers, paths, tags, component schemas and security each get a section
+with search, and adding a path, an operation or a schema goes through a short
+wizard instead of an empty JSON block.
+
+Path parameters are the one thing the form won't let you edit directly. Type
+`/loans/{loanId}/return` and a required `loanId` path parameter appears;
+remove the token and the parameter goes too, after a confirmation if you had
+filled it in. The path string is the only source, so the two can't disagree.
+
+<Screenshot
+  src="/images/projects/fastspec/editor.webp"
+  alt="FastSpec form editor showing the Bookshelf API paths, with the POST /loans/{loanId}/return operation expanded on its Parameters step and a required loanId path parameter."
+  caption="The loanId parameter was created from the {loanId} token in the path, and only changes through it. Fictional data."
+/>
+
+<Callout variant="warning" title="Swagger UI fails silently on a missing item schema">
+  An array parameter or property without a valid `items` schema still renders,
+  but Swagger UI's "Add item" button then does nothing, with no error anywhere.
+  The form tracks item schemas separately for every array type and writes them
+  to `items` on output, so the preview never ends up in that state.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="versions-and-diff"
+  title="Versions and diff"
+  status="done"
+  goal="Make every save a reviewable change: show what moved between two versions, or between a draft and what's stored, before anything is written."
+  outcome="Any two versions, or a draft and a version, diff by endpoint, schema, server and info, and export as Markdown."
+>
+
+Every spec keeps named versions. The backend diff compares two of them in API
+terms: endpoints added, removed or modified, schema fields added, removed or
+changed, plus servers and info. The same comparison runs against an unsaved
+draft, which is what the save dialog uses. Before anything is written, you see
+what changed and the lint score the new version would get. The report also
+exports as Markdown, for a PR description or a changelog.
+
+<Screenshot
+  src="/images/projects/fastspec/diff.webp"
+  alt="Version history drawer comparing two Bookshelf API versions: four additions, two modifications and one removal, with the added POST /loans endpoints and Loan schema listed."
+  caption="Two saved versions compared: loan endpoints and a Loan schema added, a member endpoint removed. Fictional data."
+/>
+
+<Screenshot
+  src="/images/projects/fastspec/save-recap.webp"
+  alt="Save dialog recap showing Changes: 0 added, 1 modified, 0 removed, and Lint: score 68/100 with 9 issues."
+  caption="The save recap for a draft that fixes a missing operationId and edits a summary. The lint score goes from 65 to 68. Fictional data."
+/>
+
+<Callout variant="decision" title="Two diff implementations, on purpose">
+  The full-repo review flagged diff logic written twice, once in Python and once in
+  JavaScript. Tracing every call site showed the frontend copies compare
+  editor state the backend has never seen (the unsaved-changes flag and live
+  drift detection), so they stay. The one real duplicate, the drawer
+  rebuilding Markdown the backend had already produced, was removed: the
+  compare endpoint now always returns both.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="custom-lint-rules"
+  title="Linting with custom rules"
+  status="done"
+  goal="Catch spec problems before an API consumer does, with house rules a team can write without learning Spectral's YAML and without being able to run code on the server."
+  outcome="Specs lint against Spectral's OpenAPI rules plus named custom rulesets, with no path to run user code."
+>
+
+Linting runs the Spectral CLI, installed in the backend's Docker image, against
+a stored spec or an unsaved draft. Spectral's `spectral:oas` rules always
+apply. On top of them, a user keeps any number of named rulesets, marks one as
+the default, and can pin another to a specific spec: a strict one for a public
+API, a looser one for an internal one. In the code view, each finding's marker
+is placed by its JSON path, so it lands on the right line in YAML and in JSON.
+
+Rules are built in a form (severity, a JSONPath target from presets, a
+function and its options), with a raw YAML tab for what the form can't
+express. "Test against current spec" runs one draft rule on its own, without
+the baseline rules, so you see exactly what it matches before saving.
+
+<Screenshot
+  src="/images/projects/fastspec/lint.webp"
+  alt="Lint results for the Bookshelf API scoring 65 out of 100, mixing Spectral baseline warnings with a custom operation-id-required error and a tags-alphabetical info finding."
+  caption="Baseline Spectral findings next to two custom rules: operation-id-required (error) and tags-alphabetical (info). Fictional data."
+/>
+
+<Screenshot
+  src="/images/projects/fastspec/rule-preview.webp"
+  alt="Custom ruleset dialog with the operation-id-required rule expanded, showing severity, function, JSONPath target, message, and a Test against current spec button reporting 1 match."
+  caption="Testing a draft rule against the open spec before saving the ruleset. Fictional data."
+/>
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Rule functions',
+      chose: "Spectral's ten built-in functions only",
+      insteadOf: 'Custom JavaScript functions',
+      why: 'Spectral loads custom functions from disk and runs them. Accepting them from users would be remote code execution, so raw YAML with functions or functionsDir is rejected at save time.',
+    },
+    {
+      label: 'extends',
+      chose: 'Only spectral: rulesets',
+      insteadOf: 'Any extends target',
+      why: 'extends can point at a URL, which would let a user make the server fetch arbitrary addresses (SSRF).',
+    },
+    {
+      label: 'Ruleset scope',
+      chose: 'Many named rulesets per user, one default, an optional pin per spec',
+      insteadOf: 'One ruleset per user',
+      why: "A public API and an internal one rarely want the same rules. Resolution is the spec's pinned ruleset, else the default, else the baseline alone.",
+    },
+  ]}
+/>
+
+<Callout variant="warning" title="In FastAPI, route order is part of the contract">
+  The lint router mixes static paths (`/rulesets`, `/preview-rule`) with
+  catch-alls (`/{spec_id}`). FastAPI matches routes in registration order, so
+  if the catch-all came first, `POST /lint/rulesets` would try to lint a spec
+  whose id is "rulesets". Static routes are registered first, with a comment
+  in the router saying why.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="mcp-server"
+  title="MCP server for AI clients"
+  status="done"
+  goal="Let an AI assistant work with a user's specs directly, with a credential the user can scope and revoke, and without ever touching their web session."
+  outcome="An API key scoped by action reads, writes, versions, compares and lints its owner's specs through eleven MCP tools."
+>
+
+A FastMCP server runs in the same app at `/mcp`. It started with three read
+tools (`who_am_i`, `get_saved_specs_for_user` and `get_spec_details`). v0.1.0
+added tools to create and delete specs, list, read and save versions, compare
+two of them, validate and lint, all reusing the services behind the HTTP API.
+
+AI clients never see the web session. Instead, a user creates an API key in
+the app, picks what it may do (`read:specs`, `write:versions`, `lint:specs`
+and so on), and adds it with the MCP URL to their client. Each tool declares
+the actions it needs, and a middleware checks them before the call runs.
+
+<Screenshot
+  src="/images/projects/fastspec/api-key.webp"
+  alt="New API Key dialog for a key named Cursor with read:specs and read:versions, showing the raw key once and the MCP server URL to paste into an AI client."
+  caption="The raw key is shown once, next to the MCP URL. Fictional data, local instance."
+/>
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Client credential',
+      chose: 'A long-lived API key, exchanged for a 5-minute JWT',
+      insteadOf: "The user's web session, or verifying the key on every call",
+      why: 'The key is hashed at rest and revocable. Clients can reuse the short JWT instead of paying for a hash check per request, and revoking the key also kills the JWTs issued from it.',
+    },
+    {
+      label: 'Key lookup',
+      chose: "A salted hash plus the key's first 12 characters",
+      insteadOf: 'The hash alone',
+      why: 'A salted hash cannot be looked up by value. Without the prefix, each call would verify against every stored key.',
+    },
+    {
+      label: 'Web sign-in',
+      chose: 'A full-page Authorization Code redirect',
+      insteadOf: "Google's popup and One Tap flow",
+      why: "Brave's popup blocker stopped the popup, so some people couldn't sign in at all. A redirect has nothing to block, and the same flow became the generic OIDC sign-in in v0.1.0.",
+    },
+  ]}
+/>
+
+<Callout variant="warning" title="FastAPI doesn't run a mounted app's lifespan">
+  FastMCP's streamable-HTTP session manager starts in its app's lifespan, and
+  FastAPI skips the lifespans of mounted sub-apps, so until v0.1.0 every MCP
+  call failed with "task group is not initialized". Sharing one manager isn't
+  the fix either: it can only start once, and on Lambda, Mangum runs a fresh
+  lifespan per invocation. The endpoint now runs stateless and builds a
+  short-lived handler for each request.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="serverless-aws"
+  title="Serverless on AWS"
+  status="done"
+  goal="Host a multi-user app on AWS that costs close to nothing while nobody uses it, and run the same infrastructure code on my laptop."
+  outcome="Lambda, S3/CloudFront and an RDS instance that stopped itself after two idle hours, all from one CDK app. A serverless Postgres replaced RDS in September 2026."
+>
+
+The infrastructure started as one CDK app in TypeScript, in five stacks: RDS
+Postgres; the backend as a Docker-image Lambda behind a Function URL; the ACM
+certificate; S3 and one CloudFront distribution for the SPA and the landing
+page; and the wake and auto-stop Lambdas. Migrations run inside the backend
+Lambda, which the deploy workflow invokes with `{"migrate": true}`. Locally,
+the same CDK code deploys into floci, a free AWS emulator. Since v0.1.0 that's
+only needed to work on the AWS deployment itself.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Compute',
+      chose: 'Docker-image Lambda behind a Function URL',
+      insteadOf: 'ECS Fargate behind an ALB, with ElastiCache',
+      why: 'The Fargate version ran first, but an ALB and a cache node bill by the hour even with no traffic. Lambda costs nothing between requests, and Redis came out with it.',
+    },
+    {
+      label: 'Local environment',
+      chose: 'The same CDK stacks deployed into floci',
+      insteadOf: 'docker-compose, or LocalStack',
+      why: "docker-compose had drifted from the real stack. LocalStack's free edition now needs an auth token; floci doesn't.",
+    },
+    {
+      label: 'Database network',
+      chose: 'Public RDS endpoint, SSL forced, generated master password',
+      insteadOf: 'Lambda in a VPC with a NAT Gateway',
+      why: 'A NAT Gateway is about $32 a month, more than the RDS instance cost while stopped most of the day. ADR-0002 recorded the trade-off; ADR-0009 retired it along with RDS.',
+    },
+  ]}
+/>
+
+<ObjectDiagram
+  arrowLabel="then"
+  nodes={[
+    {
+      name: 'Wake page (landing site)',
+      fields: [
+        { name: 'health check first', detail: 'goes straight to the app if the backend already answers' },
+        { name: 'otherwise', detail: 'POSTs to the wake Lambda and polls until the app is up (about 2 minutes)' },
+      ],
+    },
+    {
+      name: 'Wake Lambda',
+      fields: [
+        { name: 'starts RDS', detail: 'and stamps wake-last-triggered in SSM' },
+        { name: '60-minute cooldown', detail: 'repeat clicks while waking are no-ops' },
+      ],
+    },
+    {
+      name: 'Backend Lambda',
+      fields: [{ name: 'every cold start', detail: 'refreshes the same SSM timestamp' }],
+    },
+    {
+      name: 'Auto-stop Lambda',
+      fields: [
+        { name: 'every 30 minutes', detail: 'stops RDS once the timestamp is over two hours old' },
+        { name: 'DLQ and error alarm', detail: 'a failed stop would silently keep the database billing' },
+      ],
+    },
+  ]}
+/>
+
+<Callout variant="lesson" title="The wake machinery never worked">
+  In September 2026 it turned out to fail twice over. The wake page checked
+  the liveness endpoint, which answers while
+  the database sleeps, so it reported "already up". And backend cold starts
+  refreshed the timestamp the wake Lambda's cooldown read, so a visit to the
+  site disabled waking. Its tests still covered the ECS services of the
+  Fargate era, and nothing ran them. A day after the fix, all of it was
+  deleted (see the last phase).
+</Callout>
+
+<Callout variant="warning" title="CloudFormation won't put an SSM SecureString in a Lambda environment variable">
+  `{{resolve:ssm-secure:...}}` dynamic references only work on a short list of
+  resource properties, and Lambda environment variables are not on it. The
+  Lambda gets the parameter *names* instead and fetches the values from SSM at
+  cold start, so no secret appears in the console or the template.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="open-source"
+  title="Self-hosting and open source"
+  status="done"
+  goal="Make FastSpec something a stranger can try with one command and read the code of, without a Google Cloud project, an AWS account or a Postgres server."
+  outcome="v0.1.0 on 27 September 2026: one Docker image, SQLite or Postgres, no sign-in or any OIDC provider, under the AGPL-3.0."
+>
+
+The root `Dockerfile` builds the SPA, installs a pinned Spectral CLI and serves
+everything on port 8080. In production, CloudFront sends `/specs` to S3 and
+`/api`, `/auth` and `/mcp` to the Lambda; `frontdoor.py` does the same routing
+inside the app, so sign-in behaves the same in both. With no configuration,
+the container runs in single-user mode on SQLite, applies its migrations and
+generates its JWT secret into `/data`. Each release publishes it for amd64
+and arm64.
+
+The same release made the editor worth trying on a real spec: YAML editing
+(specs are still stored as JSON), import by dropping, choosing or pasting a
+file, download as YAML or JSON, a Petstore example on the first visit, and
+Swagger UI bundled instead of loaded from a CDN. Before publishing, ruff and
+ESLint went from about 300 and 1,500 findings to none, enforced in CI, and
+the backend's dependencies were pinned.
+
+<Screenshot
+  src="/images/projects/fastspec/code-editor.webp"
+  alt="FastSpec code view showing the Petstore example spec as YAML, with a YAML/JSON switch, Live Preview and Validate buttons above the Monaco editor."
+  caption="The Petstore example in the code view, switchable between YAML and JSON."
+/>
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Sign-in',
+      chose: 'AUTH_MODE=none, or any OpenID Connect provider',
+      insteadOf: 'Google only, or built-in passwords',
+      why: 'Nobody should need a Google Cloud project to try it. One OIDC code path covers Keycloak, Authentik, Okta, Entra, GitLab and Google; passwords would mean storing them, resets and brute-force protection.',
+    },
+    {
+      label: 'Database',
+      chose: 'SQLite by default, Postgres when DATABASE_URL is set',
+      insteadOf: 'Postgres only',
+      why: 'One docker run becomes a complete install, and a backup is one file. The cost: every migration has to run on both, which CI checks.',
+    },
+    {
+      label: 'License',
+      chose: 'AGPL-3.0',
+      insteadOf: 'MIT',
+      why: 'While the hosted version exists, it stops anyone from running a closed, modified copy as a service. Relaxing a license later is easy; tightening it is not.',
+    },
+    {
+      label: 'Git history',
+      chose: 'Kept, scrubbed, in a new repository',
+      insteadOf: 'Publishing it as is, or one squashed commit',
+      why: 'git filter-repo replaced the AWS account ID, hosted-zone ID, certificate ARN and author email, and blame survived. A new repository, because the old pull requests pinned the old commits.',
+    },
+  ]}
+/>
+
+<Callout variant="warning" title="Never link OIDC accounts by email">
+  Email is mutable at many providers, so matching on it lets someone take over
+  an account by changing theirs (the "nOAuth" class of bugs). Accounts are
+  keyed on the issuer and `sub`, and a sign-in whose email matches an account
+  with a different `sub` is refused, not linked. The server also refuses to
+  start on contradictory auth settings, so a forgotten `AUTH_MODE=oidc` can't
+  leave a public instance open.
+</Callout>
+
+<Callout variant="lesson" title="Packaging it for strangers was the best test">
+  Making it run with no setup found bugs months of use hadn't. The MCP server
+  had never worked, CI never ran the backend tests (pytest wasn't installed),
+  logging out didn't revoke the session on the server, version comparisons
+  showed added endpoints as removed, and unpinned SQLAlchemy 2.1 would have
+  broken Postgres connections on the next image build.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="near-zero-cost"
+  title="Near-zero hosting cost"
+  status="done"
+  goal="Bring the hosted version's idle month from about $17 down to cents, without a multi-minute wake-up."
+  outcome="Neon's free plan instead of RDS: an idle month costs about $0.03, and the first request after 5 idle minutes waits under a second."
+>
+
+A stopped RDS instance still cost about $17 a month. RDS bills the
+provisioned disk (100 GB, the CDK default) and backups while stopped, and AWS
+restarts a stopped instance after seven days anyway. Waking it took one to
+three minutes.
+
+The backend now takes any Postgres as a connection string from SSM. The
+hosted version uses Neon's free plan in AWS Singapore: it scales to zero
+after 5 idle minutes and resumes on the next connection in under a second, so
+there is nothing left to wake. The data and wake stacks, the wake page and
+the "waking up" screen were deleted, and moving the domain's DNS to
+Cloudflare, where the parent domain already lived, removed FastSpec's Route
+53 zone.
+
+v0.3.0 then added an email on every first sign-in, through an SNS topic, and
+cut the backend's log retention to 30 days, since sign-in logs can hold email
+addresses.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Database',
+      chose: "Neon's free plan, a serverless Postgres",
+      insteadOf: 'RDS, stopped when idle and woken on demand',
+      why: 'Over its limits the free plan pauses the database or blocks writes; it never bills. The data now lives outside AWS, but moving is a pg_dump and one SSM parameter away.',
+    },
+    {
+      label: 'Free-plan limits',
+      chose: 'A banner in the app and a daily usage check',
+      insteadOf: "Generic 'database unavailable' errors",
+      why: 'Neon sends no warning. The backend recognises its quota errors and answers 503 or 507 with a plain explanation, and a workflow fails above 80% storage so GitHub emails me.',
+    },
+    {
+      label: 'Sign-up email',
+      chose: 'An SNS topic, subscribed by hand',
+      insteadOf: 'A subscription in the CDK stack',
+      why: "The address would land in the public template and the deploy workflow's cdk diff output. Self-hosted instances leave the topic unset and send nothing.",
+    },
+  ]}
+/>
+
+<Callout variant="warning" title="Lambda Function URLs strip the trailing slash">
+  `/api/specs/` reached FastAPI as `/specs`, which only matched `/specs/`
+  through a redirect. FastAPI built it from the Host header, the function's
+  own URL, so the browser followed it cross-origin and got two
+  Access-Control-Allow-Origin headers, one from the Function URL and one from
+  the app. The API now ignores trailing slashes and never redirects for them,
+  and the Function URL has no CORS settings: only CloudFront calls it.
+</Callout>
+
+<Callout variant="warning" title="Neon's free-plan API only reports storage">
+  The first usage check read compute time and data transfer from Neon's API.
+  On the free plan both stay at zero, as fields of its old pricing, so it could
+  never have warned about compute. It now checks storage, and whether the app
+  can reach its database at all, which is how a used-up compute allowance
+  shows.
+</Callout>
+
+<Callout variant="lesson" title="Smoke-test the image you ship">
+  On the hosted version, lint failed with "Spectral CLI not found". Amazon
+  Linux 2023 links global npm commands into `/usr/bin`, and the configured
+  path pointed at `/usr/local/bin`. Nothing had ever linted through the Lambda
+  image. Its build now runs the CLI from the configured path, and CI starts
+  both images and lints through them.
+</Callout>
+
+</Phase>
+
+</PhaseLedger>
+
+## Tech stack
+
+<TechStack notes={frontmatter.technologyNotes} />
+
+## Future improvements
+
+- **The diff ignores parameters.** It compares summaries and request and
+  response schemas, so a new query parameter doesn't show up as a change.
+- **Lint pays a Node cold start per call.** An HTTP sidecar transport exists
+  in `spectral_client.py` with no server behind it yet, and results aren't
+  cached by spec and ruleset hash.
+- **YAML comments don't survive a save.** Specs are stored as JSON, so keeping
+  them means storing the raw text and reworking versions and diff.
+- **The hosted app connects as the database owner.** The least-privilege
+  `fastspec_app` role exists as a migration, but it only runs when
+  `FASTSPEC_APP_DB_PASSWORD` is set, and the Neon deployment doesn't set it.
+- **The hosted database keeps 6 hours of history.** Neon's free plan has no
+  long-term backup, so anything worth keeping has to be exported.
+- **One OIDC provider at a time, and no GitHub sign-in.** GitHub doesn't
+  support OIDC for user sign-in, so it would need its own OAuth2 provider.
