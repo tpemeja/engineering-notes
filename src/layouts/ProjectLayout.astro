@@ -16,7 +16,8 @@ interface Props {
 }
 
 const { project } = Astro.props;
-const { title, description, status, startDate, endDate, technologies, githubUrl, highlights } = project.data;
+const { title, description, status, startDate, endDate, technologies, githubUrl, websiteUrl, highlights } =
+  project.data;
 
 const phaseStats = getPhaseStats(project);
 
@@ -60,6 +61,14 @@ const relatedJournal = await getJournalEntriesForProject(project.id);
             <div>
               <dt>Repository</dt>
               <dd><a href={githubUrl} rel="noopener noreferrer" target="_blank">GitHub &#8599;</a></dd>
+            </div>
+          )
+        }
+        {
+          websiteUrl && (
+            <div>
+              <dt>Website</dt>
+              <dd><a href={websiteUrl} rel="noopener noreferrer" target="_blank">{new URL(websiteUrl).hostname} &#8599;</a></dd>
             </div>
           )
         }
