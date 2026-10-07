@@ -51,7 +51,7 @@ technologyNotes:
   - name: 'GitHub Actions'
     context: 'Tests on SQLite and Postgres, smoke tests of both images, gitleaks, releases to GHCR, the AWS deploy and a daily database usage check.'
   - name: 'pytest + Vitest + Jest'
-    context: 'Backend, frontend and infra suites of 247, 351 and 51 tests. Five backend tests need a real Postgres, which CI provides.'
+    context: 'Backend, frontend and infra suites of 248, 352 and 51 tests. Five backend tests need a real Postgres, which CI provides.'
 githubUrl: 'https://github.com/Kaseovo/FastSpec'
 websiteUrl: 'https://fastspec.kaseovo.com'
 highlights:
@@ -84,6 +84,12 @@ versions, diff any two of them, and lint it with Spectral against your own
 house rules. An MCP server lets AI agents such as Claude Code or Cursor read,
 write, version and lint your specs with a scoped API key.
 
+<Screenshot
+  src="/images/projects/fastspec/demo.webp"
+  alt="FastSpec's lint view shows the Bookstore API at 58 out of 100 with 14 warnings. In Claude Code, the prompt 'Fix the lint warnings in my Bookstore API spec on FastSpec, then save it as version 1.1.0' calls FastSpec's MCP tools (get_spec_details, lint_spec, validate_spec, save_spec_version), and FastSpec then shows 100 out of 100 with no issues."
+  caption="Claude Code fixes a spec's 14 lint warnings through FastSpec's MCP tools and saves it as version 1.1.0. The score goes from 58 to 100. Fictional data."
+/>
+
 It is the spec-first counterpart to [FastMock](/projects/fastmock), which mocks
 an API from the models a FastAPI app already declares. FastSpec has been open
 source (AGPL-3.0) since v0.1.0 on 27 September 2026. It runs from one Docker
@@ -91,7 +97,8 @@ image, or as a hosted version at
 [fastspec.kaseovo.com](https://fastspec.kaseovo.com). Every screenshot below
 comes from the app running locally against fictional specs.
 
-Work is paused since v0.3.0 on 2 October 2026. The hosted version keeps
+Work is paused since v0.3.0 on 2 October 2026, apart from two bug fixes in
+v0.3.1. The hosted version keeps
 running, and Dependabot still opens a pull request per ecosystem each month.
 
 ## Problem
@@ -150,6 +157,12 @@ The editor is three views over one spec object: a form, the code in Monaco
 Info, servers, paths, tags, component schemas and security each get a section
 with search, and adding a path, an operation or a schema goes through a short
 wizard instead of an empty JSON block.
+
+<Screenshot
+  src="/images/projects/fastspec/editor-demo.webp"
+  alt="In FastSpec's form editor, the Add New Path wizard adds GET /authors (List authors, listAuthors) in five steps. The code view then shows the spec as YAML next to the Swagger UI preview, and saving as version 1.2.0 opens a recap with one path added and a lint score of 100 out of 100."
+  caption="Adding GET /authors with the Add Path wizard, checking it in the YAML view and the live preview, then saving version 1.2.0 after the recap. Fictional data."
+/>
 
 Path parameters are the one thing the form won't let you edit directly. Type
 `/loans/{loanId}/return` and a required `loanId` path parameter appears;
