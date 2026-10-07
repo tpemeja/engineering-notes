@@ -1,5 +1,5 @@
 ---
-type Status = 'active' | 'paused' | 'completed' | 'evergreen' | 'draft';
+type Status = 'active' | 'evergreen' | 'draft';
 
 interface Props {
   status: Status;
@@ -9,8 +9,6 @@ const { status } = Astro.props;
 
 const labels: Record<Status, string> = {
   active: 'Active',
-  paused: 'Paused',
-  completed: 'Completed',
   evergreen: 'Evergreen',
   draft: 'Draft',
 };
@@ -42,14 +40,6 @@ const labels: Record<Status, string> = {
 
   .status-badge[data-status='active'] {
     color: var(--color-status-active);
-  }
-
-  .status-badge[data-status='paused'] {
-    color: var(--color-status-paused);
-  }
-
-  .status-badge[data-status='completed'] {
-    color: var(--color-status-completed);
   }
 
   .status-badge[data-status='evergreen'] {

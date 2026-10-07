@@ -17,7 +17,7 @@ const featuredProjects = projects.slice(0, 2);
 const recentJournal = journalEntries.slice(0, 3);
 const recentNotes = notes.slice(0, 4);
 
-const currentProject = projects.find((project) => project.data.status === 'active');
+const currentProject = projects.find((project) => project.data.active);
 ---
 
 <BaseLayout title={site.title} description={site.description}>

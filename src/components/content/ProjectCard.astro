@@ -2,30 +2,28 @@
 import type { CollectionEntry } from 'astro:content';
 import StatusBadge from '../ui/StatusBadge.astro';
 import TagList from './TagList.astro';
-import { getPhaseStats } from '../../lib/phases';
 
 interface Props {
   project: CollectionEntry<'projects'>;
 }
 
 const { project } = Astro.props;
-const { title, description, status, technologies } = project.data;
-const phaseStats = getPhaseStats(project);
+const { title, description, active, technologies, websiteUrl } = project.data;
 ---
 
 <article class="project-card">
   <a href={`/projects/${project.id}/`} class="project-card-link">
     <div class="project-card-header">
       <h3>{title}</h3>
-      <StatusBadge status={status} />
+      {active && <StatusBadge status="active" />}
     </div>
     <p class="project-card-description">{description}</p>
   </a>
   {
-    phaseStats.total > 0 && (
-      <p class="project-card-phases">
-        {phaseStats.done} of {phaseStats.total} phases done
-      </p>
+    websiteUrl && (
+      <a href={websiteUrl} class="project-card-website" rel="noopener noreferrer" target="_blank">
+        {new URL(websiteUrl).hostname} &#8599;
+      </a>
     )
   }
   <TagList tags={technologies} />
@@ -75,12 +73,9 @@ const phaseStats = getPhaseStats(project);
     line-height: 1.5;
   }
 
-  .project-card-phases {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--color-fg-muted);
+  .project-card-website {
+    align-self: flex-start;
+    font-size: 0.875rem;
+    color: var(--color-accent);
   }
 </style>

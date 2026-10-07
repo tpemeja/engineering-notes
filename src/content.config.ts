@@ -22,9 +22,8 @@ const projects = defineCollection({
     z.object({
       title: z.string(),
       description: z.string(),
-      status: z.enum(['active', 'paused', 'completed']),
+      active: z.boolean().default(false),
       startDate: z.coerce.date(),
-      endDate: z.coerce.date().optional(),
       technologies: z.array(z.string()).default([]),
       technologyNotes: z
         .array(

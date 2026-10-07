@@ -6,20 +6,16 @@ import StatusBadge from '../components/ui/StatusBadge.astro';
 import TagList from '../components/content/TagList.astro';
 import RelatedContent from '../components/content/RelatedContent.astro';
 import ProjectHighlights from '../components/content/ProjectHighlights.astro';
-import { formatDate } from '../lib/dates';
 import { getEntries } from 'astro:content';
 import { getJournalEntriesForProject } from '../lib/collections';
-import { getPhaseStats } from '../lib/phases';
 
 interface Props {
   project: CollectionEntry<'projects'>;
 }
 
 const { project } = Astro.props;
-const { title, description, status, startDate, endDate, technologies, githubUrl, websiteUrl, highlights } =
+const { title, description, active, technologies, githubUrl, websiteUrl, highlights } =
   project.data;
-
-const phaseStats = getPhaseStats(project);
 
 const relatedNotes = project.data.relatedNotesSlugs.length
   ? await getEntries(project.data.relatedNotesSlugs)
@@ -32,47 +28,31 @@ const relatedJournal = await getJournalEntriesForProject(project.id);
     <header class="project-header">
       <div class="project-header-top">
         <h1>{title}</h1>
-        <StatusBadge status={status} />
+        {active && <StatusBadge status="active" />}
       </div>
       <p class="project-description">{description}</p>
-      <dl class="project-meta">
-        <div>
-          <dt>Started</dt>
-          <dd>{formatDate(startDate)}</dd>
-        </div>
-        {
-          endDate && (
-            <div>
-              <dt>Ended</dt>
-              <dd>{formatDate(endDate)}</dd>
-            </div>
-          )
-        }
-        {
-          phaseStats.total > 0 && (
-            <div>
-              <dt>Phases</dt>
-              <dd>{phaseStats.done} of {phaseStats.total} done</dd>
-            </div>
-          )
-        }
-        {
-          githubUrl && (
-            <div>
-              <dt>Repository</dt>
-              <dd><a href={githubUrl} rel="noopener noreferrer" target="_blank">GitHub &#8599;</a></dd>
-            </div>
-          )
-        }
-        {
-          websiteUrl && (
-            <div>
-              <dt>Website</dt>
-              <dd><a href={websiteUrl} rel="noopener noreferrer" target="_blank">{new URL(websiteUrl).hostname} &#8599;</a></dd>
-            </div>
-          )
-        }
-      </dl>
+      {
+        (githubUrl || websiteUrl) && (
+          <dl class="project-meta">
+            {
+              githubUrl && (
+                <div>
+                  <dt>Repository</dt>
+                  <dd><a href={githubUrl} rel="noopener noreferrer" target="_blank">GitHub &#8599;</a></dd>
+                </div>
+              )
+            }
+            {
+              websiteUrl && (
+                <div>
+                  <dt>Website</dt>
+                  <dd><a href={websiteUrl} rel="noopener noreferrer" target="_blank">{new URL(websiteUrl).hostname} &#8599;</a></dd>
+                </div>
+              )
+            }
+          </dl>
+        )
+      }
       <TagList tags={technologies} size="md" />
     </header>
 
@@ -122,8 +102,7 @@ const relatedJournal = await getJournalEntriesForProject(project.id);
   .project-meta {
     display: flex;
     flex-wrap: wrap;
-    justify-content: space-between;
-    gap: 1.5rem;
+    gap: 1.5rem 2.5rem;
     margin: 0;
     padding: 0.9rem 0;
     border-block: 1px solid var(--color-border);
