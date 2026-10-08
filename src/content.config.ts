@@ -14,6 +14,12 @@ export const NOTE_CATEGORIES = [
   'APIs',
 ] as const;
 
+export const PROJECT_CATEGORIES = [
+  'Social media automation',
+  'FastAPI & OpenAPI tooling',
+  'Reinforcement learning experiments',
+] as const;
+
 export const PHASE_STATUSES = ['planned', 'in-progress', 'done'] as const;
 
 const projects = defineCollection({
@@ -22,6 +28,7 @@ const projects = defineCollection({
     z.object({
       title: z.string(),
       description: z.string(),
+      category: z.enum(PROJECT_CATEGORIES),
       active: z.boolean().default(false),
       startDate: z.coerce.date(),
       technologies: z.array(z.string()).default([]),

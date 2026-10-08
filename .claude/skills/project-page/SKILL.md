@@ -20,7 +20,9 @@ The page is **looked at** before it is read. Prefer anything with shape over a p
 5. **Tech stack**: `<TechStack notes={frontmatter.technologyNotes} />`.
 6. **Future improvements**: known gaps, not a roadmap.
 
-Frontmatter carries `title`, `description`, optional `active`, `startDate`, `technologies`, `technologyNotes`, `githubUrl`, `highlights`, `relatedNotesSlugs`, `order`. It carries no phase data and no `progress`.
+Frontmatter carries `title`, `description`, `category`, optional `active`, `startDate`, `technologies`, `technologyNotes`, `githubUrl`, `highlights`, `relatedNotesSlugs`, `order`. It carries no phase data and no `progress`.
+
+`category` is one of `PROJECT_CATEGORIES` in `src/content.config.ts`, and it sets the group the project is listed under on `/projects/`. The order of that array is the order of the groups; `order` sorts projects within a group. Add a new category only when a project fits none of the existing ones.
 
 `active: true` means you are working on it now, and it is the only project state the site shows. Leave it out otherwise: there is no paused or completed, because telling them apart means predicting whether you will come back.
 

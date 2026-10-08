@@ -2,8 +2,15 @@
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import ProjectCard from '../../components/content/ProjectCard.astro';
 import { getPublishedProjects } from '../../lib/collections';
+import { slugifyTag } from '../../lib/tags';
+import { PROJECT_CATEGORIES } from '../../content.config';
 
 const projects = await getPublishedProjects();
+
+const groups = PROJECT_CATEGORIES.map((category) => ({
+  category,
+  projects: projects.filter((project) => project.data.category === category),
+})).filter((group) => group.projects.length > 0);
 ---
 
 <BaseLayout
@@ -19,9 +26,17 @@ const projects = await getPublishedProjects();
         progresses, not written after the fact.
       </p>
     </header>
-    <div class="project-grid">
-      {projects.map((project) => <ProjectCard project={project} />)}
-    </div>
+
+    {
+      groups.map(({ category, projects }) => (
+        <section class="category-section" id={slugifyTag(category)}>
+          <h2>{category}</h2>
+          <div class="project-grid">
+            {projects.map((project) => <ProjectCard project={project} />)}
+          </div>
+        </section>
+      ))
+    }
   </div>
 </BaseLayout>
 
@@ -45,6 +60,19 @@ const projects = await getPublishedProjects();
   .page-header p {
     margin: 0;
     color: var(--color-fg-muted);
+  }
+
+  .category-section {
+    margin-bottom: 2.5rem;
+    scroll-margin-top: 5rem;
+  }
+
+  .category-section h2 {
+    font-size: 1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--color-fg-muted);
+    margin: 0 0 1rem 0;
   }
 
   .project-grid {
