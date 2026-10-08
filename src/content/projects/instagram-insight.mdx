@@ -252,7 +252,7 @@ not something to rotate past every few seconds.
   title="Comments with AI review"
   status="done"
   goal="Surface new comments on the tablet, then act on them (reply, hide, delete, acknowledge) with the agent's analysis to help, without ever posting something nobody approved."
-  outcome="Unseen comments grouped by post, each with an AI summary and draft reply that a person confirms."
+  outcome="Unseen comments grouped by post and filterable by tag, each with an AI summary and a draft a person confirms."
 >
 
 <Screenshot
@@ -266,6 +266,14 @@ record the action with the agent only once Instagram confirms. A failed
 Instagram call is safe to retry; a failed recording after a successful post
 only retries the recording. Actions go to the same table the dashboard
 website writes, so a comment handled on either one leaves both lists.
+
+- **Tags.** Each comment shows the agent's tag as a coloured chip, with the
+  same names and colours as the dashboard's Topics page, and a row above the
+  list filters to one kind at a time.
+- **Your own replies clear themselves.** They are kept only as context for a
+  thread that still needs an answer, so each sync acknowledges a reply of
+  yours once nobody else in its thread is waiting. Before that, 43 had piled
+  up, and the tablet listed far more than the website's To handle.
 
 <Callout variant="warning" title="The comments endpoint needs the app in Live mode, not just a valid scope and tester">
   With a tester invite accepted and `instagram_business_manage_comments`

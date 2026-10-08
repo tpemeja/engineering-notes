@@ -1,6 +1,6 @@
 ---
 title: 'Instagram Agent'
-description: 'Serverless AWS backend for one Instagram Creator account: it ingests Meta webhooks, drafts replies to comments with an LLM, polls post insights on an age-decaying schedule, and serves it all through one API.'
+description: 'Serverless AWS backend for one Instagram Creator account: it ingests Meta webhooks, tags comments and drafts replies to them and to DMs with an LLM, polls post insights on an age-decaying schedule, and serves it all through one API.'
 active: true
 startDate: 2026-08-17
 technologies:
@@ -9,7 +9,7 @@ technologies:
     'FastAPI',
     'AWS Lambda',
     'DynamoDB',
-    'Aurora Serverless v2',
+    'Aurora DSQL',
     'Gemini',
     'Terraform',
   ]
@@ -17,30 +17,30 @@ technologyNotes:
   - name: 'Python'
     context: 'All four Lambdas, the operator scripts and the tests, strictly typed with mypy.'
   - name: 'FastAPI'
-    context: 'The management API: metrics, comments, analyses, the action audit trail and the Instagram proxy.'
+    context: 'The management API: metrics, comments, analyses, the action audit trail, the Instagram proxy, translations and post ideas.'
   - name: 'AWS Lambda'
-    context: 'Four functions (webhook, processor, poller, query API), each packaged with only its own dependencies, on arm64.'
+    context: 'Four functions (webhook, processor, poller, query API), each packaged with only its own dependencies and precompiled bytecode, on arm64.'
   - name: 'SQS'
-    context: 'Decouples webhook ingestion from analysis, with a dead-letter queue and per-message batch failures.'
+    context: 'Decouples webhook ingestion from analysis, with a dead-letter queue, per-message batch failures and delayed retries when Gemini is overloaded.'
   - name: 'DynamoDB'
     context: 'Event metadata and idempotency claims, plus dense metric samples (90-day TTL) and the due-gate the poller reads first.'
-  - name: 'Aurora Serverless v2'
-    context: 'Postgres for analyses, actions and one immutable row per day, reached only through the RDS Data API and auto-pausing to zero.'
+  - name: 'Aurora DSQL'
+    context: 'Postgres-compatible storage for analyses, actions and one immutable row per day, billed per request with nothing for idle time.'
   - name: 'S3'
     context: 'Raw webhook payloads and a daily bundle of raw Graph responses, kept because insights cannot be fetched again later.'
   - name: 'Gemini'
-    context: 'Structured-output comment analysis on Gemini Flash-Lite: summary, sentiment, intent, scores and a draft reply.'
+    context: 'Structured-output analysis on Gemini Flash-Lite for comments and DM conversations, plus on-demand translations and post ideas.'
   - name: 'Terraform'
     context: 'The whole stack, deployed from GitHub Actions through an OIDC role scoped to this project.'
   - name: 'pytest + moto'
-    context: '343 tests; the full webhook to SQS to processor to API path runs in-process against mocked AWS.'
+    context: '512 tests; the full webhook to SQS to processor to API path runs in-process against mocked AWS, and Postgres tests go through the production DSQL adapter.'
 highlights:
-  - headline: '~$2/month poller'
-    detail: 'A DynamoDB due-gate keeps idle ticks from waking Aurora, which would otherwise cost about $44 a month.'
+  - headline: '$57/month DB to free tier'
+    detail: 'Aurora DSQL replaced an Aurora cluster that never paused under a five-minute poller; usage now fits the free tier.'
   - headline: 'AI drafts, a human sends'
     detail: 'The LLM only suggests an action and a reply. Nothing reaches Instagram without someone confirming it.'
   - headline: 'Token never leaves AWS'
-    detail: 'The poller is the only identity that rotates it; clients act through five scoped, audited proxy routes.'
+    detail: 'The poller is the only identity that rotates it; clients act through seven scoped, audited proxy routes.'
   - headline: 'Silent API failures mapped'
     detail: 'Every Graph metric was checked against the live API first, since wrong calls return HTTP 200 with no data.'
 relatedNotesSlugs: ['instagram-webhooks-vs-polling', 'meta-graph-api-live-mode-comments']
@@ -91,9 +91,9 @@ Screenshots on this page come from the dashboard and use a fictional account.
 - **Meta's API fails silently.** The wrong parameter shape returns HTTP 200
   with an empty `data: []`, never an error. A schema built on a guess would
   store nothing and look healthy.
-- **Scale-to-zero fights a five-minute schedule.** Aurora Serverless bills
-  about five minutes every time it wakes. A poller that opened Postgres on
-  every tick would keep it awake all month.
+- **Scale-to-zero fights a five-minute schedule.** Aurora Serverless only
+  pauses after five minutes with no query, so a poller that touches Postgres
+  every few minutes keeps it awake, and billed, all month.
 - **Replies are published under someone else's name.** An LLM can suggest,
   but a wrong reply or a wrong delete on a real account cannot be undone.
 - **The token is hard to replace.** Losing it means a browser consent flow
@@ -153,35 +153,63 @@ The order of writes is what makes it safe to retry:
 >
 
 The processor fetches the post caption, then calls Gemini with a structured
-output schema. The model returns scores and a suggestion, but the action the
-system records comes from a separate, versioned policy in code. Thresholds
-can change as a new `policy_version` without calling the LLM again.
+output schema. The model returns scores, a tag and a draft, but the action
+the system records comes from a separate, versioned policy in code.
+Thresholds can change as a new `policy_version` without calling the LLM
+again.
 
 <ObjectDiagram
   arrowLabel="deterministic, versioned"
   nodes={[
     {
-      name: 'Gemini output (prompt v2)',
+      name: 'Gemini output (prompt v5)',
       fields: [
-        { name: 'summary, topic, reason', detail: 'always in English, for the operator' },
-        { name: 'suggested_reply', detail: "in the commenter's language, since it gets published" },
+        { name: 'summary, reason', detail: 'always in English, for the operator' },
+        { name: 'intent, tag, sentiment', detail: 'one tag from a fixed list of six' },
+        { name: 'suggested_reply', detail: "always drafted, in the commenter's language" },
         { name: 'requires_answer, reply_score, ...', detail: 'scores between 0 and 1' },
       ],
     },
     {
-      name: 'policy v1',
+      name: 'policy v2',
       fields: [
+        { name: 'hide', detail: 'intent is spam: hide, never delete, since the model can be wrong' },
         { name: 'reply', detail: 'reply_score ≥ 0.6 and requires_answer ≥ 0.5' },
         { name: 'like', detail: 'encourages conversation and adds value' },
-        { name: 'ignore', detail: 'everything else; hide and delete stay human-only' },
+        { name: 'ignore', detail: 'everything else' },
       ],
     },
   ]}
 />
 
-A failed hydration or LLM call is stored as an `error` row with a code
-instead of being retried through SQS, since retrying against an expired
-token just burns invocations. `scripts/reprocess_events.py` re-drives them by
+<DecisionTable
+  decisions={[
+    {
+      label: 'Drafts',
+      chose: 'A draft for every comment, scored as if none were written',
+      insteadOf: 'A draft only when a reply seems worthwhile',
+      why: 'People sometimes answer a comment the model would skip, and need a draft to start from. Scoring stays blind to the draft so it cannot inflate the recommendation.',
+    },
+    {
+      label: '@mention',
+      chose: "Prefixed with the commenter's @handle when served",
+      insteadOf: 'Written into the stored draft',
+      why: 'A reply only notifies the commenter if it mentions them. Adding it on the way out covered every stored draft without re-running Gemini.',
+    },
+    {
+      label: 'Translation',
+      chose: 'An on-demand route for the draft about to be sent',
+      insteadOf: 'An English field on every analysis',
+      why: 'The draft gets edited before it goes out, and a new field would need a new prompt version and a re-run of every comment.',
+    },
+  ]}
+/>
+
+Gemini answers live comments with `503` when it is busy, so `429`s, `5xx`s
+and timeouts go back to SQS with a delay of 1 minute, 10 minutes, then 1
+hour, and only a fourth failure is stored. Any other failure, like an
+expired token, is stored as an `error` row straight away, since retrying it
+just burns invocations. `scripts/reprocess_events.py` re-drives those by
 error code once the cause is fixed.
 
 <Screenshot
@@ -197,7 +225,7 @@ error code once the cause is fixed.
   title="Metrics poller"
   status="done"
   goal="Collect post, follower and account insights durably, often enough to measure a fresh Reel by the hour, without paying to keep a database awake."
-  outcome="One five-minute tick polls whatever is due, and idle ticks never wake Aurora: about $2 a month."
+  outcome="One five-minute tick polls whatever is due; an idle tick costs one DynamoDB read and no database work."
 >
 
 There is one EventBridge rule and no tiers. Each tick asks every subject
@@ -212,7 +240,10 @@ a missed tick heals itself.
 | Account insights + daily roll-up | 24h |
 
 The first thing a tick does is read one DynamoDB item holding the earliest
-moment anything is due. Most ticks stop there (~130 ms). Dense samples go to
+moment anything is due. Most ticks stop there (~130 ms). Due times for
+anything polled every 15 minutes or less snap to a shared wall-clock grid,
+so jobs batch onto the same ticks: a simulated quiet day reaches the
+database 96 times, evenly spaced, instead of ~200. Dense samples go to
 DynamoDB, which has no idle charge, and Postgres is written once a day.
 
 <DecisionTable
@@ -252,13 +283,15 @@ DynamoDB, which has no idle charge, and Postgres is written once a day.
   title="Token ownership and proxy"
   status="done"
   goal="Take the long-lived Instagram token off the tablet, without breaking the tablet's comment logic or letting a read-only client moderate."
-  outcome="The token lives only in AWS, and clients reply, hide or delete through five scoped proxy routes."
+  outcome="The token lives only in AWS; clients moderate comments and answer DMs through seven scoped proxy routes."
 >
 
 The poller is the only identity with `PutSecretValue`, and refreshes the
 token when fewer than 10 days remain. The token is read at runtime and never
 cached across invocations. A CloudWatch alarm on `TokenDaysRemaining` treats
-missing data as breaching, so a poller that stops running also pages.
+missing data as breaching, so a poller that stops running also sends an
+email. It is the one alarm kept, because it is the one failure a redeploy
+cannot fix.
 
 - **Lease, not reserved concurrency.** The account's Lambda quota is 10, and
   AWS refuses any reservation below that floor, so exclusivity comes from a
@@ -309,6 +342,133 @@ tablet and the dashboard cannot drift apart.
   alt="Horizontal bars showing hours for each recent post to reach 80% of its eventual views, between about 15 and 40 hours"
   caption="/metrics/velocity: hours for each post to reach 80% of its eventual audience. Fictional data."
 />
+
+</Phase>
+
+<Phase
+  id="dm-conversations"
+  title="DM conversations"
+  status="done"
+  goal="Give DMs the same review-then-act loop as comments, where the thing to judge is a whole conversation rather than one message."
+  outcome="Each incoming message re-analyses its conversation, and any outgoing message closes it."
+>
+
+Every incoming message re-reads its whole conversation under prompt `dm-v1`
+and writes a new `conversation_analyses` row: an English summary, tags, a
+suggested action, and a reply drafted in the customer's language.
+
+- **What closes it:** an outgoing message, sent from the Instagram app or
+  through the API, is recorded as the reply that answers the conversation.
+- **Acting on it:** two more proxy routes send a DM and heart a message,
+  under the same `instagram:write` scope as comment moderation.
+- **History:** a throttled backfill script analyses conversations that
+  arrived before this existed.
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/direct-messages.webp"
+  alt="Two DM conversations in the dashboard: a thank-you after the account sent a recipe, with Like suggested, and a question about frying oil, with Reply suggested"
+  caption="Conversation analyses as the dashboard shows them: the thread, an English summary and the suggested action. Fictional data."
+/>
+
+</Phase>
+
+<Phase
+  id="comment-tags"
+  title="Comment tags and post ideas"
+  status="done"
+  goal="Group comments by what they are, so the account can see what people ask for and turn it into the next posts."
+  outcome="Six fixed tags replace a free-text topic that gave 134 distinct topics for 178 comments."
+>
+
+The prompt asks for one tag per comment from a list the account owner
+chose: question, dish request, tried it, criticism, compliment or other. It
+comes from the same Gemini call, through a schema where it is required, and
+the draft follows a rule per tag:
+
+- **Question:** answer from the caption, without inventing quantities it
+  does not give.
+- **Tried it:** thank them and invite a photo.
+- **Criticism:** stay factual.
+- **Compliment:** one line.
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/topics.webp"
+  alt="Six tags with a bar each, from 31 questions down to 3 other, each with how many were replied to and how many are open"
+  caption="/metrics/tags rendered by the dashboard: comments per tag, with how many got a reply and how many are still open. Fictional data."
+/>
+
+`POST .../content-ideas` hands Gemini the recent questions, dish requests,
+criticism and tried-it comments, as English summaries with their captions
+and never their authors, and returns 3-5 post ideas, each citing the
+comments it answers. An idea that cites no real comment is dropped, and
+nothing is stored.
+
+<Callout variant="decision" title="Re-running history must not disturb what reads it">
+  Re-analysing old comments under a new prompt cannot bring handled ones
+  back. The listing shows each comment's newest successful analysis, so a
+  failed re-run keeps the old one. An action belongs to the comment, not to
+  an analysis row. Quality, sentiment and coverage count each comment once.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="dsql-migration"
+  title="Moving to Aurora DSQL"
+  status="done"
+  goal="Stop paying ~$57 a month for a Postgres that never got to pause, without rewriting a repository or losing a row in the move."
+  outcome="Aurora DSQL behind the existing Data API seam: ~40k DPU a month, inside the free tier, and 0 when idle."
+>
+
+A spike against a DSQL cluster loaded with a copy of production data
+measured ~40k DPU a month for the same traffic, against a free tier of 100k.
+The move was a run of small changes, each deployable on its own:
+
+1. **An adapter**, `db/dsql.py`, that speaks the RDS Data API's
+   `execute_statement` shape over an IAM-authenticated psycopg connection,
+   so every repository ran unchanged.
+2. **DSQL next to Aurora**, with a $5 monthly budget counted before
+   credits, since DSQL has no capacity cap to stop a runaway bill.
+3. **A baseline schema** in DSQL's dialect, and a copy script that compares
+   an md5 over every table. Rehearsed on production data: migrated in 25 s,
+   all 10 tables byte-identical.
+4. **The switch**, then the Aurora cluster and its code path removed.
+
+| DSQL behaviour | How the adapter handles it |
+|---|---|
+| Closes connections at 60 min, and frozen Lambdas wake with dead sockets | Recycle a connection past 50 min of age or 4 min idle |
+| Optimistic concurrency, so conflicts surface as `40001` | Retry with backoff; retry a dropped connection for reads only, never writes |
+| An open transaction is billed | Autocommit on every connection, matching the Data API |
+
+<Callout variant="lesson" title="Scale-to-zero needs gaps longer than the pause timeout">
+  Aurora pauses only after 300 seconds with no query. About 30 subjects
+  kept their own polling clocks, so some tick did a small job every 5-10
+  minutes, and the cluster sat at its 0.5 ACU floor 80-85% of every quiet
+  day: ~$57 a month instead of the expected $4-6. Few queries is not enough;
+  the quiet stretches have to outlast the timeout, or the database has to
+  bill per request instead.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="query-api-cold-start"
+  title="Query API cold starts"
+  status="done"
+  goal="Cut what the dashboard waits for when the query API starts cold, since it sits behind every page load."
+  outcome="Imports drop from 756 to 286 ms with precompiled bytecode, and the API gets its own 1024 MB setting."
+>
+
+| Change | Effect |
+|---|---|
+| Precompiled bytecode in every package | `query_api` imports from 756 to 286 ms, measured locally on Python 3.12 |
+| Query API memory from 256 to 1024 MB | A cold container took ~2.2 s to start, then ~3.8 s more opening the DSQL connection; CPU scales with memory |
+
+The bytecode fix is the same read-only `/var/task` trap the
+[dashboard's backend](/projects/instagram-dashboard/#page-load) hit: the
+package script deleted every `__pycache__` and never compiled any. The
+webhook, processor and poller stay at 256 MB, and all of it stays inside the
+free tier at this traffic.
 
 </Phase>
 
