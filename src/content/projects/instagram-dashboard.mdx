@@ -1,6 +1,6 @@
 ---
 title: 'Instagram Dashboard'
-description: 'Password-protected website on top of the Instagram Agent: account growth and post trends, AI-reviewed comments to reply to, hide or acknowledge, kept in sync with the tablet.'
+description: 'Website on top of the Instagram Agent, behind Google sign-in: account growth and post trends, comment topics, AI-reviewed comments and DMs to handle in sync with the tablet, and a weekly digest email.'
 active: true
 startDate: 2026-09-01
 technologies:
@@ -10,6 +10,8 @@ technologies:
     'FastAPI',
     'AWS Lambda',
     'CloudFront',
+    'Amazon SES',
+    'Cloudflare',
     'Terraform',
   ]
 technologyNotes:
@@ -18,26 +20,34 @@ technologyNotes:
   - name: 'TypeScript'
     context: 'Typed mirrors of the agent API responses, including which fields are null when something was not measured.'
   - name: 'Vite'
-    context: 'Dev server with an /api proxy, so local development runs on one origin like production does.'
+    context: 'Dev server with an /api proxy, so local development runs on one origin like production does. A demo mode builds the same app around an in-browser fake API.'
   - name: 'FastAPI'
-    context: 'The backend: password login, signed session cookie, and a proxy to the agent that holds the management token.'
+    context: 'The backend: Google sign-in, signed session cookie, and a proxy to the agent that holds the management token.'
+  - name: 'Google OAuth'
+    context: 'Sign in with Google through the authorization-code flow with PKCE, run server-side, for a list of invited emails.'
   - name: 'AWS Lambda'
-    context: 'The backend behind API Gateway on its own subdomain.'
+    context: 'Two functions from one package: the API behind API Gateway, and the weekly digest. The API runs at 1024 MB and ships precompiled bytecode.'
   - name: 'S3 + CloudFront'
     context: 'Static hosting for the SPA; the bucket blocks all public access and is only readable through Origin Access Control.'
   - name: 'Secrets Manager'
-    context: 'Holds the management token, site password and session key, read at runtime rather than set as Lambda env vars.'
+    context: 'Holds the management token, Google client secret and session key, read at runtime rather than set as Lambda env vars.'
+  - name: 'SES + EventBridge Scheduler'
+    context: 'Send the weekly digest every Sunday evening. Subscribers are SES identities, so verifying the address is the opt-in.'
+  - name: 'Cloudflare'
+    context: 'DNS for the dashboard subdomains, and a Worker serving the public demo as static files.'
   - name: 'Terraform'
-    context: 'Backend, frontend hosting and DNS, deployed from GitHub Actions through an OIDC role.'
+    context: 'Backend, digest, frontend hosting and certificates, deployed from GitHub Actions through an OIDC role.'
+websiteUrl: 'https://dashboard-demo.kaseovo.com'
 highlights:
   - headline: 'Token never in browser'
-    detail: 'A small backend holds the API token server-side; the browser only ever gets an HttpOnly session cookie.'
+    detail: 'A small backend holds the API token; the browser only gets an HttpOnly session cookie after Google sign-in.'
+  - headline: 'Public demo, no backend'
+    detail: 'The same frontend answers every request in the browser from a made-up account, and its CSP blocks the real API.'
+    href: 'https://dashboard-demo.kaseovo.com'
   - headline: 'In sync with the tablet'
     detail: 'A comment handled on the website drops off the tablet, and the other way round, through one shared table.'
-  - headline: 'Missing is never zero'
-    detail: 'Unmeasured days render as a dash and sort last, so a gap in collection never reads as a post nobody watched.'
-  - headline: 'Built for a 10-Lambda limit'
-    detail: 'The client caps itself at three requests in flight after a page load triggered API Gateway throttling.'
+  - headline: 'Imports 518 → 222 ms'
+    detail: "Shipping precompiled bytecode in the Lambda package more than halved the backend's import time on a cold start."
 relatedNotesSlugs: []
 order: 16
 ---
@@ -54,7 +64,7 @@ import BranchDiagram from '../../components/content/BranchDiagram.astro';
 
 <Screenshot
   src="/images/projects/instagram-dashboard/insights.webp"
-  alt="Dashboard Insights page with a followers card, a posts tracked card, 7/30/90 day toggles and a follower growth chart marked where the tablet import hands over to the poller"
+  alt="Dashboard Insights page under the six-tab navigation, with a followers card, a posts tracked card, 7/30/90 day toggles and a follower growth chart"
   caption="The Insights page. The freshness line says which half of the page is sealed daily history and which half is live. All screenshots use a fictional account."
 />
 
@@ -62,11 +72,13 @@ A website for checking my wife's Instagram account from anywhere, built on
 top of the [Instagram Agent](/projects/instagram-agent/). The
 [tablet](/projects/instagram-insight/) is great for a glance at home, but it is
 stuck on a wall. This is the same data on a phone or a laptop, with more room
-for tables and for handling comments.
+for tables and for handling comments and DMs.
 
-It has five pages: Insights, Posts, Trends, Comments and Events. It started
-read-only and now moderates too. A reply, hide or delete goes through the
-agent, and lands in the same action table the tablet reads.
+It has six pages: Insights, Posts, Trends, Comments, Topics and Events. A
+reply, hide, delete or DM goes through the agent, and lands in the same
+action table the tablet reads. A weekly digest email sums up the week, and a
+[public demo](https://dashboard-demo.kaseovo.com) runs the same frontend on a
+made-up cooking account.
 
 ## Problem
 
@@ -74,16 +86,17 @@ agent, and lands in the same action table the tablet reads.
   can read any account, so it must never reach a browser where devtools
   could pull it out.
 - **The site is on the public internet.** It has to be reachable from
-  anywhere, but stay private to the two of us, with no account system to
-  build or run.
-- **Two clients, one to-do list.** A comment answered on the tablet must not
-  still show as "to handle" on the website, and the other way round.
+  anywhere, but stay private to a few invited people, with no account system
+  to build or run.
+- **Two clients, one to-do list, and a third that keeps no record.** A
+  comment answered on the tablet must not still show as "to handle" on the
+  website, and a reply written in the Instagram app records nothing at all.
 - **The data has holes that look like zeros.** Collection started at
   different times for different metrics, and daily history is only sealed
   two days late.
 - **The AWS account allows 10 concurrent Lambdas.** Each dashboard call uses
-  two (this backend plus the agent), and the Insights page asks for nine
-  things at once.
+  two (this backend plus the agent), the Insights page asks for nine things
+  at once, and any of them can land on a cold start.
 
 ## Approach
 
@@ -91,12 +104,13 @@ The browser gets nothing it could leak. The backend holds every secret, the
 frontend holds a session cookie, and each route is a straight pass-through
 to the agent scoped to one account ID. Query params and response shapes are
 forwarded unchanged, so the agent stays the only place where a metric is
-defined.
+defined. The public demo follows the same rule from the other side: it has
+no backend at all, so there is nothing in it to leak.
 
 The UI is honest about what it does not know. A `null` from the agent is
 rendered as a dash and sorted last, a window that covered fewer days than it
-names gets a marker, and the Insights page states how fresh each half of
-its data is.
+names gets a marker, and the Insights page and the digest both state how
+fresh each half of their data is.
 
 ## What I built
 
@@ -104,14 +118,14 @@ its data is.
 
 <Phase
   id="secure-proxy"
-  title="Backend proxy and login"
+  title="Backend proxy and Google sign-in"
   status="done"
-  goal="Put the dashboard on the public internet without the management token, the password or the session key ever leaving the server side."
-  outcome="The browser only sees a session cookie; every secret is read at runtime from Secrets Manager."
+  goal="Put the dashboard on the public internet without the management token, the Google client secret or the session key ever leaving the server side."
+  outcome="The browser only holds a session cookie, issued to an invited Google account and rechecked per request."
 >
 
 <BranchDiagram
-  source={{ name: 'Browser', detail: 'password login, then an HttpOnly session cookie' }}
+  source={{ name: 'Browser', detail: 'Google sign-in, then an HttpOnly session cookie' }}
   branchLabel="two subdomains, one registrable domain"
   branches={[
     { name: 'CloudFront + S3', detail: 'the static SPA, bucket reachable only through OAC' },
@@ -130,6 +144,12 @@ its data is.
       why: 'The agent token is not scoped per account, so a purely client-side app would hand it to anyone who opens devtools.',
     },
     {
+      label: 'Sign-in',
+      chose: 'Sign in with Google, for a list of invited emails',
+      insteadOf: 'One shared password',
+      why: 'Nothing to share or rotate, and the list is checked on every request, so removing an email ends a session already open.',
+    },
+    {
       label: 'Secrets',
       chose: 'One Secrets Manager entry, values pushed out-of-band',
       insteadOf: 'Lambda environment variables from Terraform',
@@ -144,8 +164,10 @@ its data is.
   ]}
 />
 
-The password is compared with `secrets.compare_digest`, and rotating the
-session key logs every session out, which is the point of rotating it.
+The backend runs Google's authorization-code flow itself, with PKCE and a
+`state` cookie, so the browser only ever follows redirects and the client
+secret never leaves the server. Rotating the session key logs every session
+out, which is the point of rotating it.
 
 </Phase>
 
@@ -214,28 +236,220 @@ on the day-over-day gain the agent computes instead.
 >
 
 Comments opens on **To handle**: analyses with no recorded action, grouped
-by post. Each row shows the AI's suggested action, sentiment, reply score
-and summary, with the suggested action highlighted. Reply opens the draft
-for editing, and every write asks for confirmation.
+by post, with a filter row to work through one tag at a time. Each row shows
+the AI's suggested action, sentiment, reply score and summary. Reply opens
+the draft for editing, and every write asks for confirmation.
 
 <Screenshot
   src="/images/projects/instagram-dashboard/to-handle.webp"
-  alt="A post card with two comments: a question tagged reply with a 92% score and a highlighted Reply button, and a praise comment with its suggested reply open in an editable text box above a Publish reply button"
-  caption="To handle: the AI suggests, a person edits and publishes. Fictional account and comments."
+  alt="A French question tagged Question with its suggested reply open in an editable box, an English translation of the draft underneath, and a Publish reply button"
+  caption="To handle: the AI suggests, a person edits and publishes. A draft in another language shows its English translation underneath. Fictional account and comments."
 />
 
-Actions follow the tablet's write-then-report order. The Instagram write
-happens first, through the agent's proxy, and only a confirmed result is
-recorded. The two failures stay separate:
+The translation runs once when the box opens and is cached by draft text.
+After an edit it marks itself out of date and offers to redo it, rather than
+spending the Gemini quota comment analysis needs on every keystroke.
+
+Actions follow the tablet's write-then-report order: the Instagram write
+goes through the agent's proxy first, and only a confirmed result is
+recorded.
 
 | Failure | What happened | Retry |
 |---|---|---|
 | Instagram failure | Nothing changed on Instagram | Safe to retry the whole action |
 | Recording failure | Instagram succeeded, the record did not | Retry only the recording, never the post |
 
-The list re-syncs every 30 seconds and when the tab regains focus. A sync
-only reconciles the first page it fetched, so comments loaded with "Load
-more" and a reply being typed survive it.
+The list re-syncs every 30 seconds and when the tab regains focus, without
+dropping comments loaded with "Load more" or a reply being typed.
+
+</Phase>
+
+<Phase
+  id="direct-messages"
+  title="Direct messages"
+  status="done"
+  goal="Answer DMs from the same To handle list as comments, inside the 24-hour window Instagram allows for a reply."
+  outcome="DMs read as conversations and can be answered or liked until Instagram's 24-hour window closes."
+>
+
+Events shows each conversation as one chat-style card. To handle gets a
+Direct messages section fed by the agent's conversation analyses: tags, an
+English summary, the thread, and the actions below. Past the 24-hour window,
+only the last one is offered.
+
+- **Reply** sends the DM, with the same English translation under the draft.
+- **Like** hearts the message.
+- **Acknowledge** or **Already done on Instagram** records it without
+  sending anything.
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/direct-messages.webp"
+  alt="Two DM conversations in To handle: a thank-you after the account sent a recipe, with Like suggested, and a question about frying oil, with Reply suggested"
+  caption="DMs in To handle, with the account's own message in pink. The AI suggests a like for a thank-you and a reply for a question. Fictional data."
+/>
+
+<Callout variant="lesson" title="A timestamp without a zone is local time to the browser">
+  The agent sends analysis times as `2026-09-29 22:38:23`: UTC, with no
+  zone. `new Date` reads that as local time, so in Tokyo every card showed
+  nine hours early, and the 24-hour window could be reported closed while it
+  was still open. One shared parser now pins the bare form to UTC and leaves
+  timestamps that carry an offset alone.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="reply-status"
+  title="Replies made in the Instagram app"
+  status="done"
+  goal="Stop comments answered in the Instagram app from sitting in To handle forever, since a reply written there never reaches the action table."
+  outcome="Comments answered in the app show as Replied or Probably replied, read from the thread itself."
+>
+
+The thread is the evidence. To handle reads the stored comments from the
+oldest pending one onwards (usually one request, nothing asked of
+Instagram), and tags each comment by what the account wrote after it.
+
+| What the thread shows | Tag | Effect |
+|---|---|---|
+| The account's reply @mentions the commenter, or they are the only other person in the thread | Replied | Sure; flagged in To handle |
+| The account only wrote later in the same thread | Probably replied | Dashed tag; never suppresses the suggested reply |
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/reply-status.webp"
+  alt="A comment tagged Probably replied, showing the account's later message in the thread, with Mark as replied first among the actions"
+  caption="A probable reply: the account wrote in the thread afterwards without naming the commenter. Mark as replied records it without touching Instagram. Fictional data."
+/>
+
+</Phase>
+
+<Phase
+  id="page-load"
+  title="Faster first load"
+  status="done"
+  goal="Open the dashboard after a break without waiting 8-10 seconds on Lambda cold starts stacked one behind the other."
+  outcome="Panels draw as their data lands, and cold-start imports drop from 518 to 222 ms with precompiled bytecode."
+>
+
+Almost all of the wait was cold starts queued behind each other. Five
+changes cut it down, at no added cost:
+
+| Change | What it saves |
+|---|---|
+| No session check before a page loads; the first 401 from a data route sends you to sign-in | A full round trip, usually a cold start |
+| Insights draws each panel as its data arrives, requesting in page order | The top of the page fills first instead of waiting on all nine |
+| One HTTP client per process instead of one per call | A new connection to the agent on every call |
+| Lambda memory from 256 to 1024 MB, still inside the free tier | CPU scales with memory; a cold start spent ~1.8 s on imports and the secret fetch |
+| Precompiled bytecode in the package | Imports from 518 to 222 ms, measured locally on Python 3.12 |
+
+<Callout variant="lesson" title="A read-only filesystem cannot cache bytecode">
+  The package script removed every `__pycache__` and never compiled any, and
+  `/var/task` is read-only, so each cold start compiled FastAPI and pydantic
+  from source and could not keep the result. The bytecode is now compiled by
+  the same Python version as the runtime, in unchecked-hash mode, so the
+  zip's file times cannot invalidate it.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="topics"
+  title="Topics and post ideas"
+  status="done"
+  goal="Show what comments are about, not just how many there are, and turn what people ask for into ideas for the next posts."
+  outcome="Comments counted by tag with what is still open, and 3-5 post ideas tied to the comments behind them."
+>
+
+The agent's analysis gives each comment one of six tags: question, dish
+request, tried it, criticism, compliment or other. Topics counts them, then
+breaks the busiest posts down by tag; a click on a post's segment opens
+those comments. The same tags and colours drive the filter row in To handle.
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/topics.webp"
+  alt="What people talk about card: six tags with a bar each, from 31 questions down to 3 other, each with how many were replied to and how many are open"
+  caption="What people talk about, over 30 days. Each tag says how many got a reply and how many are still open. Fictional data."
+/>
+
+Suggest ideas asks the agent for 3-5 post ideas from the window's comments,
+each listing the comments it answers. Ideas are generated on demand and
+never stored: each set is one Gemini call on the same free quota the
+comment analysis uses.
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/post-ideas.webp"
+  alt="Ideas for your next posts: three ideas with a title and pitch, the first expanded to show the four comments behind it with Open thread links"
+  caption="Post ideas, each opening onto the comments that asked for it. Fictional data."
+/>
+
+</Phase>
+
+<Phase
+  id="weekly-digest"
+  title="Weekly digest email"
+  status="done"
+  goal="Bring the week to people who will not open the dashboard: the numbers, what is waiting, the posts that did best, what people talked about and ideas for the next posts."
+  outcome="An email every Sunday at 20:00 Tokyo time, sent only to people who subscribed and verified themselves."
+>
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/digest.webp"
+  alt="Top of the digest email: follower, views, reach and interactions tiles with week-on-week changes, a Needs you card with comments and DMs waiting, and the most watched posts with their pictures"
+  caption="The top of a digest, rendered by the real template on a made-up week. Account insights cover the newest seven days Meta has sealed; followers are live, and the email says so."
+/>
+
+- **Its own Lambda and IAM role**, built from the backend's package, fired
+  by EventBridge Scheduler and sent through SES. The API Lambda never holds
+  permission to send email.
+- **A section that fails is reported in the email**, not dropped. Silence
+  on a Sunday looks exactly like a quiet week.
+- **Post pictures travel inside the message** as `cid:` attachments,
+  because Instagram's thumbnail links expire within days and an email is
+  read whenever it is read.
+- **Each person subscribes themselves** on the Digest page, as the Google
+  account they signed in with. A subscriber is a tagged SES identity, so the
+  verification link SES sends is the confirmation.
+
+<Callout variant="lesson" title="A test that skips the preflight tests nothing a browser does">
+  Unsubscribe sends a `DELETE`, and CORS only allowed `GET` and `POST`, so
+  every browser's preflight was refused and the button failed for everyone.
+  The route's tests sent the `DELETE` straight to it, skipping the
+  preflight, and passed. A test now asks the way a browser does.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="public-demo"
+  title="Public demo"
+  status="done"
+  goal="Let anyone try the dashboard, replies and DMs included, with no account, no real data, and no way to reach the real one."
+  outcome="dashboard-demo.kaseovo.com runs the real frontend on an invented account, with no backend behind it."
+>
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/demo-banner.webp"
+  alt="Pink demo banner explaining it is a made-up cooking account with nothing connected to Instagram, with a Start over link, above the dashboard's six-tab navigation"
+  caption="The banner on every page of the demo."
+/>
+
+A demo build answers every request in the browser, from an invented cooking
+account laid out around the moment the page opens: the newest post is always
+a few hours old, and a few comments and a DM arrive while it is open. What a
+visitor does stays in their own localStorage and resets at their midnight.
+The switch is a build-time constant, so the normal build drops the demo code
+entirely.
+
+What keeps it harmless even if its code changes:
+
+- **No backend, no shared state.** A Cloudflare Worker serves static files,
+  so nothing one visitor types can reach another.
+- **`connect-src 'self'`** in its Content-Security-Policy makes the browser
+  refuse any request off the demo's own origin, the real API included.
+- **The real session cookie is host-only** on the API's subdomain, and the
+  API's CORS and Origin checks accept only the real dashboard.
+- **The Cloudflare token** belongs to a `demo` environment that only `main`
+  may deploy to, and only the deploy step sees it.
 
 </Phase>
 
@@ -247,9 +461,9 @@ more" and a reply being typed survive it.
 
 ## Future improvements
 
-- **One password, no users.** Fine for two people; anything more needs real
-  accounts and per-user audit in the action table.
-- **Messages are read-only.** DMs are listed under Events but cannot be
-  answered from here yet.
+- **No roles, and no names on actions.** Everyone on the invited list can do
+  everything, and the action table does not record who handled a comment.
+- **The digest is still in SES's sandbox.** Every subscriber has to verify
+  their address first, and the list is capped at 10.
 - **Concurrency is capped client-side.** The real fix is raising the AWS
   Lambda quota, which is a support request rather than a code change.
