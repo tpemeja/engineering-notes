@@ -1,16 +1,41 @@
 ---
 title: 'Now'
 description: "What I'm focused on right now."
-updatedDate: 2026-07-28
+updatedDate: 2026-10-10
 ---
 
 ## Building
 
-I've built Belote as a new game in [OpenSpiel](https://github.com/deepmind/open_spiel)
-and still need to get it merged upstream. In the meantime I'm already
-working on the ML side, training and evaluating agents to play it. Once
-it takes shape, it'll show up under [projects](/projects/), with
-progress tracked week to week in the [journal](/journal/).
+Right now my time is split between two things.
+
+[Kataribe](/projects/kataribe/) is a hackathon prototype due on
+2026-10-18: a voice AI that talks with Japanese seniors for a few minutes
+a day and turns their memories into a life story their family can read,
+hear and ask more about. It runs on the Gemini Live API, and the hard part
+is making sure the AI never puts words in their mouth.
+
+The rest goes into a set of tools around my wife's Instagram cooking
+account. The [Instagram Agent](/projects/instagram-agent/) is a
+serverless AWS backend that takes in Meta webhooks, polls post insights,
+and drafts replies to comments and DMs with an LLM, though a person still
+confirms anything before it's sent. On top of it sit a
+[web dashboard](/projects/instagram-dashboard/) and an
+[always-on tablet](/projects/instagram-insight/), and
+[VideoEdit](/projects/videoedit/) writes the bilingual captions for her
+videos.
+
+Outside those two, [FastSpec](/projects/fastspec/), my app for writing,
+versioning and linting OpenAPI specs, is now open source. You can
+self-host it from one Docker image, and its MCP server lets AI agents read
+and edit specs.
+
+[Belote AI](/projects/belote-ai/) has grown well past getting the game
+into OpenSpiel. My seeding fix landed upstream as
+[open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584),
+and the agents now run from hand-written rules to Monte Carlo search to
+networks that match that search at 148x the speed. The next step is the
+language model: trying larger models, and letting the model propose a few
+cards for Monte Carlo to check instead of picking alone.
 
 ## Learning
 

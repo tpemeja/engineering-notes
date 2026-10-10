@@ -39,6 +39,7 @@ const CATEGORY_BY_TAG: Record<string, TagCategory> = {
   datastore: 'Libraries',
 
   pytest: 'Tooling',
+  playwright: 'Tooling',
   uv: 'Tooling',
   mkdocs: 'Tooling',
   ffmpeg: 'Tooling',

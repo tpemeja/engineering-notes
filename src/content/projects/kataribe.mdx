@@ -1,0 +1,395 @@
+---
+title: 'Kataribe'
+description: 'Voice AI that talks with Japanese seniors for a few minutes a day on Gemini Live, and turns their memories into a life story their family can read, hear and ask more about. A hackathon prototype.'
+category: 'Voice AI'
+active: true
+startDate: 2026-09-22
+technologies:
+  [
+    'Python',
+    'FastAPI',
+    'Gemini',
+    'React',
+    'TypeScript',
+    'SQLite',
+    'Playwright',
+  ]
+technologyNotes:
+  - name: 'Python'
+    context: 'The backend, the processing pipeline and the live test harness, on 3.13 with uv.'
+  - name: 'FastAPI'
+    context: 'Seniors, sessions, recordings and the family view. It also mints the single-use token each conversation runs on.'
+  - name: 'Gemini'
+    context: 'gemini-3.8-live for the voice, with native audio and built-in transcription. gemini-3.8-flash with structured output for extraction, screening, planning and judging.'
+  - name: 'React'
+    context: 'One Vite app for the tuning console, past sessions and the family page. An audio worklet resamples the microphone to 16 kHz.'
+  - name: 'TypeScript'
+    context: 'The frontend, which talks to Gemini Live directly through @google/genai on the token the backend minted.'
+  - name: 'SQLite'
+    context: 'Seniors, sessions, stories, plans and family questions behind a storage port, with recordings on local disk.'
+  - name: 'pytest'
+    context: 'Offline tests on every push, plus a live marker for tests that stream real audio at the API.'
+  - name: 'Playwright'
+    context: 'Browser tests with the microphone replaced by a recorded sample, including a nightly six-minute endurance run.'
+  - name: 'GitHub Actions'
+    context: 'Lint, types and offline tests on every push; the live evals nightly at 03:00 JST, since they run in real time and cost quota.'
+githubUrl: 'https://github.com/tpemeja/kataribe'
+highlights:
+  - headline: '12 of 12 consent checks'
+    detail: "A story reaches the family only on the person's own words of agreement. A no, a hesitation or never being asked keeps it private."
+  - headline: 'Quotes checked verbatim'
+    detail: 'Every quote is matched word for word against the transcript. Anything the model paraphrased is dropped, not stored.'
+  - headline: 'Nightly live-audio evals'
+    detail: 'Synthesized Japanese streamed at the real API, an AI interviewee to spar with, and a six-minute session in a real browser.'
+  - headline: 'Session drops traced'
+    detail: "Sessions dying at two minutes were the client's own 20 s ping timeout, not the server. With it off, one ran 391 s."
+relatedNotesSlugs: []
+order: 10
+---
+
+import Callout from '../../components/content/Callout.astro';
+import PhaseLedger from '../../components/content/PhaseLedger.astro';
+import Phase from '../../components/content/Phase.astro';
+import TechStack from '../../components/content/TechStack.astro';
+import Screenshot from '../../components/content/Screenshot.astro';
+import DecisionTable from '../../components/content/DecisionTable.astro';
+import BranchDiagram from '../../components/content/BranchDiagram.astro';
+
+## Overview
+
+<Screenshot
+  src="/images/projects/kataribe/family-page.webp"
+  alt="Family page for 田中ハル, born 1941 in Kiryu: stories grouped by life stage (childhood, marriage), each with a summary and a quote with a play button, and a granddaughter's question shown above the wedding kimono story that answered it"
+  caption="The family page. Stories are grouped by life stage, every quote plays her own voice, and a granddaughter's question sits above the story that answered it. The senior and her stories are fictional."
+/>
+
+A voice AI that talks with an elderly person in Japanese for a few minutes a
+day, and turns what they remember into a life story their family can read and
+hear. A *kataribe* (語り部) is a traditional keeper of oral history, the person
+who remembers the stories and passes them on. It is a hackathon prototype,
+built in the open with a deadline of 2026-10-18.
+
+The voice is only the channel; the product is the loop. Each conversation
+becomes stories, people and places on a life timeline, the gaps in that
+timeline plan the next conversation, and relatives can send questions the
+interviewer asks next time. Nothing reaches the family until the person says
+it can.
+
+## Problem
+
+- **Remembering takes time.** Someone reaching for a sixty-year-old memory
+  pauses for seconds. The Live API ends a turn after 800 ms of silence by
+  default, so the interviewer would talk over the memory it asked for.
+- **A memoir cannot hold a plausible guess.** The model hears *Shigeru* and
+  writes 佐藤繁 when the man is 佐藤茂. Same sound, wrong grandfather, in the
+  one document a family keeps.
+- **Sharing is the senior's call.** Nothing reaches a relative without her
+  agreement, and a relative must not be able to tell what she declined.
+- **The bugs that matter only show up live.** Configs that passed every offline
+  check died on a live socket, and the 5-10 minute sessions the product needs
+  are longer than any quick test.
+- **Four weeks, and native ears are scarce.** Every prompt change needs a
+  native Japanese speaker to judge it, and one is not always free.
+
+## Approach
+
+Built as vertical slices: each one ends with something that runs and can be
+shown, never a half-wired layer waiting on the next.
+
+One rule runs through the code: **the AI never speaks for the person.** A
+quote is stored only if it is found word for word in the transcript, consent
+counts only as her own words of agreement, and facts we already know (her
+name, birthplace and family) are handed to the model rather than transcribed.
+
+Behaviour is measured against the live API over several runs and reported as
+*n of n*, because a single good run proves little. French and English exist
+so the whole loop can be exercised without a Japanese speaker in the room, but
+only a Japanese session decides whether it works.
+
+## What I built
+
+<PhaseLedger>
+
+<Phase
+  id="live-voice"
+  title="Japanese voice in the browser"
+  status="done"
+  goal="Run a real-time Japanese voice conversation in the browser on Gemini Live, without letting the browser decide who the interviewer is or how long it waits."
+  outcome="Live Japanese voice in the browser, on a token that locks the interviewer's prompt and tuning."
+>
+
+<Screenshot
+  src="/images/projects/kataribe/console.webp"
+  alt="Interview tuning console: a senior picker, a voice picker set to Sulafat, a pause-before-replying slider at 5000 ms with measured guidance, end-of-speech sensitivity set to LOW, an input file picker for replaying a session, and a Start conversation button"
+  caption="The tuning console. Pause length and voice are chosen here, validated by the backend and locked into the session's token."
+/>
+
+The backend mints a single-use ephemeral token with the whole session config
+locked in: prompt, voice, pause length and transcription. The browser streams
+16 kHz microphone audio straight to Gemini with it and cannot rewrite any of
+those fields. Each session is saved as a stereo WAV (senior left, interviewer
+right), and a saved one can be replayed in place of the microphone to compare
+two prompts on the same words.
+
+How long the interviewer waits through silence, measured against synthesized
+speech:
+
+| Patience | Pause | Result |
+|---|---|---|
+| 3500 ms | 1.5 s | waited |
+| 3500 ms | 2.5 s | **cut in** |
+| 6000 ms | 2.5 s | waited |
+| 6000 ms | 4.0 s | waited |
+
+The gap the model sees is longer than the pause itself, so the default is
+5000 ms.
+
+<Callout variant="warning" title="Affective dialog breaks token sessions">
+`enable_affective_dialog` works on a direct API-key connection, but any session
+opened through an ephemeral token rejects realtime audio with close code 1007
+once it is set, whether locked into the token or asked for by the client.
+Emotional sensitivity lives in the interviewer prompt instead.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="live-evals"
+  title="Testing against the live API"
+  status="done"
+  goal="Test what only appears on a live socket: transcription of names, waiting through a pause, staying in the right language, and sessions as long as the product needs."
+  outcome="A nightly suite streams real audio at the live API, including a six-minute session in a real browser."
+>
+
+Two layers, split by cost:
+
+- **`make check`**, on every push: lint, types, config shape, endpoint
+  validation and the resampler maths. Offline and fast.
+- **`make eval`**, nightly: synthesized Japanese streamed at the real API in
+  real time, through the same token path the browser uses. It checks the
+  transcript, the patience setting and the reply's rules, graded partly by
+  code and partly by a model judging against the prompt itself.
+
+**`make spar`** goes further and puts the interviewer in a live conversation
+with an AI playing the person being interviewed. Both sides are real audio,
+so pauses and turn-taking are genuine. Each persona presses one rule:
+
+| Persona | Behaviour | The interviewer must |
+|---|---|---|
+| `haru` | Pauses two or three seconds mid-memory | not fill the silence |
+| `shigeru` | Refuses to discuss the war | drop it |
+| `kimiko` | Drifts to another subject | follow rather than steer back |
+
+<Callout variant="lesson" title="The server was never hanging up">
+Sparring sessions kept dying at 70-130 seconds with `1011 keepalive ping
+timeout`. It looked like a harness quirk, but it killed the interviewer's own
+test session too, and no test had run long enough to notice. The SDK hands
+Python's websockets library its default 20 second ping timeout, and the Live
+API does not reliably pong inside it, so the client itself hung up on a
+healthy connection. With the timeout off, one connection ran 391 seconds. The browser
+was never affected, and a nightly six-minute browser run keeps it that way.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="conversation-feel"
+  title="Sounding like a conversation"
+  status="done"
+  goal="Have the interviewer open the conversation itself, and stop answering every turn with the same acknowledgement followed by a question."
+  outcome="The interviewer greets first, and 3 of 6 sparring turns now react without asking anything."
+>
+
+A sparring run showed exactly what a tester had reported: stiff and
+relentlessly interrogative. The prompt said to keep acknowledgements short,
+but never said a turn could be *only* an acknowledgement, so it always asked.
+
+| Before | After |
+|---|---|
+| そうでしたか。…もう少しお聞かせいただけますか。 | それは立派な柿ですね。 |
+| そうですか。…どんなお料理にされるのですか。 | まあ、それは愛らしいですね。 |
+| Same acknowledgement, then a question, every turn | 6 turns, 3 with no question, acknowledgements varied |
+
+Three rules went into the prompt in all three languages: a turn may end
+without a question, an acknowledgement is never reused, and a reaction says
+what the story did to you rather than repeating it. When a session opens, a
+short stage direction ("they have just sat down, speak to them gently") makes
+the interviewer greet first, so nobody has to work out that they should start.
+
+<Callout variant="warning" title="Client content leaves a Live session deaf">
+Sending the stage direction with `sendClientContent` produces a good greeting,
+then the session stops answering the audio that follows, and sometimes closes
+with 1006. `sendRealtimeInput({ text })` greets just as well and the
+conversation carries on.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="memory"
+  title="From conversation to life story"
+  status="done"
+  goal="Turn each finished conversation into stories on a life timeline, find what is missing, and open the next session from it, without the model putting words in the person's mouth."
+  outcome="Every stored quote is found verbatim in the transcript, and session two opens by recalling session one."
+>
+
+<BranchDiagram
+  source={{ name: 'Finished session', detail: 'stereo recording + both transcripts' }}
+  branchLabel="Gemini Flash, structured output, then verified in code"
+  branches={[
+    { name: 'Stories', detail: 'title, life stage, people, places, her quotes' },
+    { name: 'Gaps', detail: 'thin life stages, people never described' },
+    { name: 'Avoid list', detail: 'topics she declined, never raised again' },
+  ]}
+  mergeLabel="planned and written into the next token"
+  merge={{ name: 'Next session prompt', detail: 'story so far, planned questions, what to avoid' }}
+/>
+
+The model is asked for the person's own words, and `verify` then looks for
+each quote in the transcript, ignoring only spacing and punctuation. A quote
+that is not there is dropped rather than kept: a memoir is the one place a
+plausible paraphrase must not end up. Stories land on six life stages, from
+childhood to later life, and the next session opens with a word about the
+last one.
+
+<Callout variant="decision" title="No prompt can fix a homophone">
+佐藤茂 and 佐藤繁 both read *Shigeru*, so asking the model to be careful
+changes nothing. The fix is to stop transcribing what we already know: the
+senior's name, its reading, birth year, birthplace and family go into the
+prompt from their profile. Names outside the profile (the first boss, the
+neighbour) still have the problem.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="consent"
+  title="Consent before sharing"
+  status="done"
+  goal="Let a story reach the family only when the person agreed to share it, and keep every other story off the family page entirely."
+  outcome="A story is shared only on her own words of agreement, found in the transcript: 12 of 12 runs."
+>
+
+The interviewer asks at the end of a story whether the family may read it.
+Extraction returns the words she used to agree, and `verify` checks them
+against the transcript exactly as it checks quotes. No words, or words that
+are not there, and the story stays private. Measured against the real model,
+three runs each:
+
+| What she said | Result |
+|---|---|
+| A clear yes | shared, 3 of 3 |
+| A no | private, 3 of 3 |
+| A hesitation: 「うーん、そうですねえ……どうしましょうかねえ」 | private, 3 of 3 |
+| Never asked | private, 3 of 3 |
+
+Private stories are filtered out in the query, so there is no route by which
+one arrives and is merely not rendered. A browser test checks that not a word
+of one reaches the page; the family only sees a count.
+
+<Callout variant="decision" title="No endpoint writes stories">
+The browser tests need stories at a known visibility, but a write path into
+the family view is the last thing this product should grow. The tests seed
+the store through the same code the processing pipeline uses, not through a
+test-only route.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="family-questions"
+  title="The family asks back"
+  status="done"
+  goal="Let a relative send a question the interviewer asks next time, saying who it is from, and bring the answer back to them without revealing anything she kept private."
+  outcome="A relative's question opens the next session by name, and her answer links back if she shared it."
+>
+
+<Screenshot
+  src="/images/projects/kataribe/family-question.webp"
+  alt="Ask 田中ハル something: a short explanation, a question from 孫のゆか about her wedding kimono marked Answered with a link to the story, a form for relation and name and the question, a Send question button, and a line saying one story has been kept private"
+  caption="A granddaughter's question, answered and linked to the story. The private story shows only as a count."
+/>
+
+The opening of the next session, with the family question in it:
+
+> こんにちは、田中ハルさん。前回伺ったお父様の織物の工場のお話を、今もよく覚えています。今日はお孫さんのゆかさんが、結婚式のときのお着物のことを知りたがっていらっしゃいましたよ。どんなお着物でしたか?
+
+The rules around it:
+
+- **Who is asking is the point.** The interviewer always says who the question
+  is from, so the form asks for the relation as well as the name (孫のゆか).
+- **At most two per session, oldest first.** It is her story, not a queue.
+- **Nothing she refused is asked, even by family.** Each question is screened
+  against the avoid list before it is stored, and again whenever she refuses
+  something new. A held question looks exactly like one still waiting.
+- **The answer is linked, not copied.** If she kept it private, the relative
+  sees "no reply has been shared", the same as if she declined.
+
+Against the real models: screening 3 of 3, reporting which questions were
+answered 9 of 9.
+
+<Callout variant="lesson" title="'When the conversation allows' means never">
+The first prompt said to ask the family question when the conversation
+allowed. Given a choice of topic, the interviewer always picked something
+else. Making it the opening topic fixed that, but pushed the recall of last
+time out of the opening in 3 of 3 runs. The opening now has an order (last
+time first, then the family question), and it has held 6 of 6.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="ready-to-judge"
+  title="Ready to judge"
+  status="in-progress"
+  goal="Get the prototype in front of the judges by 2026-10-18: deployed, with a subtitled demo video and a pitch deck that shows the family loop rather than a person talking to a device."
+  outcome="Target: deployed, with a subtitled demo video and pitch deck, by 2026-10-18."
+>
+
+- **Pitch deck:** content written and versioned in the repo.
+- **Demo video:** shot list written; recording and English subtitles to do.
+- **English dev view and deployment:** to do.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Starting a session',
+      chose: 'A big Talk button',
+      insteadOf: 'On-device presence detection',
+      why: "Lighting and angle decide whether face detection works on camera, and a judge watching someone talk to a device sees a companion app. The family loop is what makes this different.",
+    },
+    {
+      label: 'Working language',
+      chose: 'Keep testing in French',
+      insteadOf: 'Wait for a native Japanese review',
+      why: 'French exercises most of the behaviour and does not block on a speaker being free. What only Japanese can show stays unjudged until the review happens.',
+    },
+  ]}
+/>
+
+</Phase>
+
+</PhaseLedger>
+
+## Tech stack
+
+What each piece of the stack is actually doing, and where to look for more:
+
+<TechStack notes={frontmatter.technologyNotes} />
+
+## Future improvements
+
+- **Native Japanese review.** Prompt changes have gone unreviewed in the
+  language that ships. Whether a light restatement like 〜なんですね reads as
+  warm aizuchi or as parroting is a native speaker's call.
+- **Names outside the profile.** A name heard once could be stored in kana as
+  it was heard rather than in kanji the model picked, and a relative could fix
+  the spelling in one tap from the family page.
+- **Exact audio for each quote.** The Live API accepts `word_timestamp` and
+  returns no word offsets, so a quote's play button seeks to where the previous
+  turn ended. A transcription pass over the stored recording would make it
+  exact.
+- **Presence detection.** The tablet noticing someone sitting nearby and
+  inviting them, instead of a button.
+- **The family page in Japanese, and notifications.** Its chrome is still
+  English, and relatives have to come back to see whether an answer landed.

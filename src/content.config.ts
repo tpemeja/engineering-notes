@@ -16,6 +16,7 @@ export const NOTE_CATEGORIES = [
 
 export const PROJECT_CATEGORIES = [
   'Social media automation',
+  'Voice AI',
   'FastAPI & OpenAPI tooling',
   'Reinforcement learning experiments',
 ] as const;
