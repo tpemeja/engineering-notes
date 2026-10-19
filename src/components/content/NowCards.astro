@@ -1,0 +1,244 @@
+---
+interface Link {
+  label: string;
+  href: string;
+}
+
+interface Card {
+  title: string;
+  href?: string;
+  status: string;
+  tone?: 'accent' | 'live' | 'muted';
+  summary: string;
+  image?: string;
+  imageAlt?: string;
+  links?: Link[];
+  featured?: boolean;
+}
+
+interface Props {
+  cards: Card[];
+}
+
+const { cards } = Astro.props;
+const external = (href: string) => /^https?:/.test(href);
+
+// An odd card out at the end of the grid spans the row, laid out like a featured one.
+const regular = cards.filter((card) => !card.featured);
+const lastWide = regular.length % 2 === 1 && regular.length > 1 ? regular.at(-1) : undefined;
+---
+
+<ul class="not-prose now-cards">
+  {
+    cards.map((card) => (
+      <li
+        class="now-card"
+        data-featured={card.featured ? '' : undefined}
+        data-wide={card === lastWide ? '' : undefined}
+      >
+        {card.image && (
+          <a href={card.href ?? card.image} class="now-card-image" tabindex="-1" aria-hidden="true">
+            <img src={card.image} alt={card.imageAlt ?? ''} loading="lazy" />
+          </a>
+        )}
+        <div class="now-card-body">
+          <span class="now-card-status" data-tone={card.tone ?? 'muted'}>
+            <span class="now-card-dot" aria-hidden="true" />
+            {card.status}
+          </span>
+          <h3>{card.href ? <a href={card.href}>{card.title}</a> : card.title}</h3>
+          <p>{card.summary}</p>
+          {card.links && card.links.length > 0 && (
+            <div class="now-card-links">
+              {card.links.map((link) =>
+                external(link.href) ? (
+                  <a href={link.href} target="_blank" rel="noopener noreferrer">
+                    {link.label} ↗
+                  </a>
+                ) : (
+                  <a href={link.href}>{link.label}</a>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      </li>
+    ))
+  }
+</ul>
+
+<style>
+  .now-cards {
+    list-style: none;
+    margin: 1.25rem 0 2rem;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  @media (max-width: 640px) {
+    .now-cards {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .now-card {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background-color: var(--color-bg);
+    transition: border-color 0.15s ease;
+  }
+
+  .now-card:hover {
+    border-color: var(--color-accent);
+  }
+
+  .now-card-image {
+    display: block;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-bg-subtle);
+  }
+
+  .now-card-image img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: top left;
+  }
+
+  @media (min-width: 641px) {
+    .now-card[data-featured],
+    .now-card[data-wide] {
+      grid-column: 1 / -1;
+      flex-direction: row;
+    }
+
+    .now-card[data-featured] .now-card-image,
+    .now-card[data-wide] .now-card-image {
+      flex: 0 0 55%;
+      aspect-ratio: 16 / 10;
+      border-bottom: 0;
+      border-right: 1px solid var(--color-border);
+    }
+
+    .now-card[data-wide] .now-card-image {
+      flex-basis: 50%;
+    }
+
+    .now-card[data-wide] .now-card-body {
+      justify-content: center;
+    }
+
+    .now-card[data-featured] .now-card-body {
+      justify-content: center;
+      padding: 1.5rem;
+    }
+
+    .now-card[data-featured] h3 {
+      font-size: 1.375rem;
+    }
+  }
+
+  .now-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1rem 1.15rem 1.15rem;
+    flex: 1;
+  }
+
+  .now-card-status {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.15rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--color-border);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-fg-muted);
+  }
+
+  .now-card-dot {
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 999px;
+    background-color: var(--color-fg-muted);
+  }
+
+  .now-card-status[data-tone='accent'] {
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  }
+
+  .now-card-status[data-tone='accent'] .now-card-dot {
+    background-color: var(--color-accent);
+    animation: now-pulse 2s ease-in-out infinite;
+  }
+
+  .now-card-status[data-tone='live'] {
+    color: var(--color-status-active);
+    border-color: color-mix(in srgb, var(--color-status-active) 40%, transparent);
+  }
+
+  .now-card-status[data-tone='live'] .now-card-dot {
+    background-color: var(--color-status-active);
+  }
+
+  @keyframes now-pulse {
+    50% {
+      opacity: 0.3;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .now-card-status[data-tone='accent'] .now-card-dot {
+      animation: none;
+    }
+  }
+
+  .now-card h3 {
+    margin: 0;
+    font-size: 1.0625rem;
+    font-weight: 600;
+  }
+
+  .now-card h3 a {
+    color: var(--color-fg);
+    text-decoration: none;
+  }
+
+  .now-card h3 a:hover {
+    color: var(--color-accent);
+  }
+
+  .now-card p {
+    margin: 0;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--color-fg-muted);
+  }
+
+  .now-card-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 0.9rem;
+    margin-top: auto;
+    padding-top: 0.35rem;
+    font-size: 0.875rem;
+  }
+
+  .now-card-links a {
+    color: var(--color-accent);
+  }
+</style>

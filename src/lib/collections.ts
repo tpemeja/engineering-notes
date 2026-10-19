@@ -1,4 +1,5 @@
 import { getCollection, type CollectionEntry } from 'astro:content';
+import { milestones } from '../data/milestones';
 
 const isProd = import.meta.env.PROD;
 
@@ -37,32 +38,43 @@ export async function getPublishedNotes(): Promise<CollectionEntry<'notes'>[]> {
   return entries.sort((a, b) => b.data.lastUpdated.valueOf() - a.data.lastUpdated.valueOf());
 }
 
-export interface TimelineEntry {
+export interface ActivityEntry {
   date: Date;
-  title: string;
-  description: string;
+  kind: 'started' | 'shipped' | 'merged' | 'wrote' | 'noted';
+  text: string;
+  detail?: string;
   href: string;
-  kind: 'project' | 'journal';
 }
 
-export async function getTimeline(): Promise<TimelineEntry[]> {
-  const [projects, journal] = await Promise.all([getPublishedProjects(), getPublishedJournalEntries()]);
+export async function getRecentActivity(limit: number): Promise<ActivityEntry[]> {
+  const [projects, journal, notes] = await Promise.all([
+    getPublishedProjects(),
+    getPublishedJournalEntries(),
+    getPublishedNotes(),
+  ]);
 
-  const projectEntries: TimelineEntry[] = projects.map((entry) => ({
-    date: entry.data.startDate,
-    title: entry.data.title,
-    description: entry.data.description,
-    href: `/projects/${entry.id}/`,
-    kind: 'project',
-  }));
+  const entries: ActivityEntry[] = [
+    ...projects.map((entry) => ({
+      date: entry.data.startDate,
+      kind: 'started' as const,
+      text: entry.data.title,
+      detail: entry.data.tagline,
+      href: `/projects/${entry.id}/`,
+    })),
+    ...journal.map((entry) => ({
+      date: entry.data.date,
+      kind: 'wrote' as const,
+      text: entry.data.title,
+      href: `/journal/${entry.id}/`,
+    })),
+    ...notes.map((entry) => ({
+      date: entry.data.lastUpdated,
+      kind: 'noted' as const,
+      text: entry.data.title,
+      href: `/notes/${entry.id}/`,
+    })),
+    ...milestones.map((m) => ({ ...m, date: new Date(m.date) })),
+  ];
 
-  const journalEntries: TimelineEntry[] = journal.map((entry) => ({
-    date: entry.data.date,
-    title: entry.data.title,
-    description: entry.data.summary,
-    href: `/journal/${entry.id}/`,
-    kind: 'journal',
-  }));
-
-  return [...projectEntries, ...journalEntries].sort((a, b) => b.date.valueOf() - a.date.valueOf());
+  return entries.sort((a, b) => b.date.valueOf() - a.date.valueOf()).slice(0, limit);
 }

@@ -29,6 +29,7 @@ const projects = defineCollection({
     z.object({
       title: z.string(),
       description: z.string(),
+      tagline: z.string().max(80).optional(),
       category: z.enum(PROJECT_CATEGORIES),
       active: z.boolean().default(false),
       startDate: z.coerce.date(),

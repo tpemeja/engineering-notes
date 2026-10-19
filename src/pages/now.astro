@@ -1,20 +1,25 @@
 ---
 import { getEntry, render } from 'astro:content';
 import PageLayout from '../layouts/PageLayout.astro';
-import Timeline from '../components/content/Timeline.astro';
-import { getTimeline } from '../lib/collections';
+import ActivityLog from '../components/content/ActivityLog.astro';
+import { getRecentActivity } from '../lib/collections';
 
 const entry = await getEntry('pages', 'now');
 if (!entry) throw new Error('Missing src/content/pages/now.mdx');
 const { Content } = await render(entry);
-const timeline = await getTimeline();
+const activity = await getRecentActivity(8);
 ---
 
 <PageLayout title={entry.data.title} description={entry.data.description} updatedDate={entry.data.updatedDate}>
   <Content />
 
-  <h2 class="not-prose timeline-heading">Timeline</h2>
-  <Timeline items={timeline} />
+  <h2 class="not-prose timeline-heading">Recently</h2>
+  <ActivityLog items={activity} />
+  <div class="not-prose">
+    <p class="timeline-more">
+      Earlier work is on the <a href="/projects/">projects</a> and <a href="/journal/">journal</a> pages.
+    </p>
+  </div>
 </PageLayout>
 
 <style>
@@ -25,5 +30,15 @@ const timeline = await getTimeline();
     text-transform: uppercase;
     letter-spacing: 0.03em;
     color: var(--color-fg-muted);
+  }
+
+  .timeline-more {
+    margin: 0.9rem 0 0;
+    font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+
+  .timeline-more a {
+    color: var(--color-accent);
   }
 </style>

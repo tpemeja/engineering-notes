@@ -4,53 +4,62 @@ description: "What I'm focused on right now."
 updatedDate: 2026-10-19
 ---
 
-## Building
+import NowCards from '../../components/content/NowCards.astro';
 
-Right now my time is split between two things.
+## Right now
 
-[Kataribe](/projects/kataribe/) is submitted to Google Cloud's AI Builder
-Cup 2026, and I'm waiting on the judges, who have until 2026-11-06. It's a
-voice AI that talks with Japanese seniors for a few minutes a day and turns
-their memories into a life story their family can read, hear and ask more
-about. The hard part was making sure the AI never puts words in their
-mouth. Until judging ends I keep the
-[live site](https://kataribe.kaseovo.com) running, where you can try it on
-your own life in English, and the
-[demo video](https://youtu.be/wg3SdraT2Oo) shows it in Japanese.
+<NowCards
+  cards={[
+    {
+      featured: true,
+      title: 'Waiting on the AI Builder Cup',
+      status: 'Judging ends Nov 6',
+      tone: 'accent',
+      image: '/images/projects/kataribe/start-page.webp',
+      imageAlt: 'The Kataribe start page, where judges try it on their own life',
+      summary:
+        'Four weeks of building, and Kataribe is submitted. Until the results come in, I keep the live site up, check it every morning, and leave the code exactly as it was submitted.',
+      links: [
+        { label: 'What I built', href: '/projects/kataribe/' },
+        { label: 'Try it yourself', href: 'https://kataribe.kaseovo.com' },
+      ],
+    },
+    {
+      title: 'Putting a language model at the Belote table',
+      status: 'Next up',
+      summary:
+        'Trying larger models, and letting the model propose a few cards for Monte Carlo search to check instead of picking alone.',
+      links: [{ label: 'Belote AI', href: '/projects/belote-ai/' }],
+    },
+    {
+      title: 'AWS ML Engineer Associate',
+      status: 'Learning',
+      tone: 'live',
+      summary:
+        'Working through the MLA-C01 course: training pipelines, serving, and what keeps a model reliable in production.',
+      links: [
+        { label: 'The course', href: 'https://www.udemy.com/course/aws-certified-machine-learning-engineer-associate-mla-c01/' },
+      ],
+    },
+    {
+      title: 'The DevOps Handbook',
+      status: 'Reading',
+      summary: 'What I am reading at the moment, alongside the course.',
+      links: [{ label: 'Reading list', href: '/about/#reading-list' }],
+    },
+  ]}
+/>
 
-The rest goes into a set of tools around my wife's Instagram cooking
-account. The [Instagram Agent](/projects/instagram-agent/) is a
-serverless AWS backend that takes in Meta webhooks, polls post insights,
-and drafts replies to comments and DMs with an LLM, though a person still
-confirms anything before it's sent. On top of it sit a
-[web dashboard](/projects/instagram-dashboard/) and an
-[always-on tablet](/projects/instagram-insight/), and
-[VideoEdit](/projects/videoedit/) writes the bilingual captions for her
-videos.
+## Where I'm heading
 
-Outside those two, [FastSpec](/projects/fastspec/), my app for writing,
-versioning and linting OpenAPI specs, is now open source. You can
-self-host it from one Docker image, and its MCP server lets AI agents read
-and edit specs.
+I'm a backend engineer moving toward the parts of software that sit around
+machine learning:
 
-[Belote AI](/projects/belote-ai/) has grown well past getting the game
-into OpenSpiel. My seeding fix landed upstream as
-[open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584),
-and the agents now run from hand-written rules to Monte Carlo search to
-networks that match that search at 148x the speed. The next step is the
-language model: trying larger models, and letting the model propose a few
-cards for Monte Carlo to check instead of picking alone.
+- **ML infrastructure.** How models get trained, served and kept healthy,
+  learned by building real things rather than only reading about them.
+- **Reinforcement learning.** Game agents are where I practise it, measured
+  against each other rather than judged by feel.
+- **Building in public.** Each project ends with a write-up here, and each
+  lesson worth keeping becomes a [note](/notes/).
 
-## Learning
-
-I'm focused on ML infrastructure right now: training pipelines, serving,
-and the plumbing that makes a model reliable in production. I'm working
-through the
-[AWS Certified Machine Learning Engineer - Associate (MLA-C01)](https://www.udemy.com/course/aws-certified-machine-learning-engineer-associate-mla-c01/)
-course on Udemy toward that certification. Anything that sticks will get
-written up in [notes](/notes/).
-
-## Reading
-
-Currently reading *The DevOps Handbook*. See the
-[reading list](/about/#reading-list) for everything else in rotation.
+Everything I've built so far is on the [projects page](/projects/).

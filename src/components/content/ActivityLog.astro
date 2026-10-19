@@ -1,0 +1,136 @@
+---
+import type { ActivityEntry } from '../../lib/collections';
+
+interface Props {
+  items: ActivityEntry[];
+}
+
+const { items } = Astro.props;
+
+const labels: Record<ActivityEntry['kind'], string> = {
+  started: 'Started',
+  shipped: 'Shipped',
+  merged: 'Merged',
+  wrote: 'Journal',
+  noted: 'Note',
+};
+
+const date = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+const external = (href: string) => /^https?:/.test(href);
+---
+
+<ol class="not-prose activity-log">
+  {
+    items.map((item) => (
+      <li>
+        <time datetime={item.date.toISOString()}>{date(item.date)}</time>
+        <span class="activity-kind" data-kind={item.kind}>
+          {labels[item.kind]}
+        </span>
+        <div class="activity-text">
+          <a
+            href={item.href}
+            target={external(item.href) ? '_blank' : undefined}
+            rel={external(item.href) ? 'noopener noreferrer' : undefined}
+          >
+            {item.text}
+            {external(item.href) && ' ↗'}
+          </a>
+          {item.detail && <p>{item.detail}</p>}
+        </div>
+      </li>
+    ))
+  }
+</ol>
+
+<style>
+  .activity-log {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .activity-log li {
+    display: grid;
+    grid-template-columns: 3.75rem 4.75rem minmax(0, 1fr);
+    align-items: baseline;
+    column-gap: 0.75rem;
+    padding-block: 0.6rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .activity-log time {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+    text-transform: uppercase;
+  }
+
+  .activity-kind {
+    justify-self: start;
+    padding: 0.05rem 0.45rem;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-fg-muted);
+  }
+
+  .activity-kind[data-kind='shipped'],
+  .activity-kind[data-kind='merged'] {
+    color: var(--color-accent);
+    border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+  }
+
+  .activity-kind[data-kind='started'] {
+    color: var(--color-status-active);
+    border-color: color-mix(in srgb, var(--color-status-active) 40%, transparent);
+  }
+
+  .activity-text {
+    min-width: 0;
+  }
+
+  .activity-text p {
+    margin: 0.1rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--color-fg-muted);
+  }
+
+  .activity-log a {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.9375rem;
+    color: var(--color-fg);
+    text-decoration: none;
+  }
+
+  .activity-log a:hover {
+    color: var(--color-accent);
+  }
+
+  @media (max-width: 480px) {
+    .activity-log li {
+      grid-template-columns: 3.25rem minmax(0, 1fr);
+      row-gap: 0.2rem;
+    }
+
+    .activity-kind {
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    .activity-text {
+      grid-column: 2;
+    }
+
+    .activity-log a {
+      white-space: normal;
+    }
+  }
+</style>
