@@ -1,0 +1,96 @@
+---
+interface Slide {
+  src: string;
+  alt: string;
+  caption: string;
+}
+
+interface Props {
+  slides: Slide[];
+  href?: string;
+  linkLabel?: string;
+}
+
+const { slides, href, linkLabel = 'Open the full deck' } = Astro.props;
+---
+
+<figure class="not-prose slide-gallery">
+  <ol class="slide-grid">
+    {
+      slides.map((slide) => (
+        <li>
+          <a href={slide.src} target="_blank" rel="noopener" class="slide-frame">
+            <img src={slide.src} alt={slide.alt} loading="lazy" />
+          </a>
+          <p>{slide.caption}</p>
+        </li>
+      ))
+    }
+  </ol>
+  {
+    href && (
+      <figcaption>
+        <a href={href} target="_blank" rel="noopener">
+          {linkLabel} ↗
+        </a>
+      </figcaption>
+    )
+  }
+</figure>
+
+<style>
+  .slide-gallery {
+    margin-block: 1.5rem;
+  }
+
+  .slide-grid {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+  }
+
+  @media (max-width: 640px) {
+    .slide-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .slide-frame {
+    display: block;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--color-border);
+    border-radius: 0.375rem;
+    overflow: hidden;
+    background-color: var(--color-bg-subtle);
+    transition: border-color 0.15s ease;
+  }
+
+  .slide-frame:hover {
+    border-color: var(--color-accent);
+  }
+
+  .slide-frame img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .slide-grid p {
+    margin: 0.4rem 0 0;
+    font-size: 0.8125rem;
+    color: var(--color-fg-muted);
+  }
+
+  .slide-gallery figcaption {
+    margin-top: 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  .slide-gallery figcaption a {
+    color: var(--color-accent);
+  }
+</style>

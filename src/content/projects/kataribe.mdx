@@ -1,6 +1,6 @@
 ---
 title: 'Kataribe'
-description: 'Voice AI that talks with Japanese seniors for a few minutes a day on Gemini Live, and turns their memories into a life story their family can read, hear and ask more about. A hackathon prototype.'
+description: "Voice AI that talks with Japanese seniors for a few minutes a day on Gemini Live, and turns their memories into a life story their family can read, hear and ask more about. Submitted to Google Cloud's AI Builder Cup 2026, and waiting on the judges."
 category: 'Voice AI'
 active: true
 startDate: 2026-09-22
@@ -11,36 +11,41 @@ technologies:
     'Gemini',
     'React',
     'TypeScript',
+    'Google Cloud',
     'SQLite',
     'Playwright',
   ]
 technologyNotes:
   - name: 'Python'
-    context: 'The backend, the processing pipeline and the live test harness, on 3.13 with uv.'
+    context: 'The backend, the processing pipeline, the live test harness and the script that builds the pitch deck, on 3.13 with uv.'
   - name: 'FastAPI'
-    context: 'Seniors, sessions, recordings and the family view. It also mints the single-use token each conversation runs on.'
+    context: 'Seniors, visitors, sessions, recordings and the family view. It also mints the single-use token each conversation runs on.'
   - name: 'Gemini'
-    context: 'gemini-3.8-live for the voice, with native audio and built-in transcription. gemini-3.8-flash with structured output for extraction, screening, planning and judging.'
+    context: 'gemini-3.8-live for the voice, with native audio and built-in transcription. gemini-3.8-flash with structured output for extraction, screening, planning, judging and listening back to quotes.'
   - name: 'React'
-    context: 'One Vite app for the tuning console, past sessions and the family page. An audio worklet resamples the microphone to 16 kHz.'
+    context: 'One Vite app for the start page, the tuning console and the family page. An audio worklet resamples the microphone to 16 kHz.'
   - name: 'TypeScript'
     context: 'The frontend, which talks to Gemini Live directly through @google/genai on the token the backend minted.'
+  - name: 'Google Cloud'
+    context: 'Cloud Run in Tokyo serving the whole app from one image, Firestore and Cloud Storage behind the storage port, Cloud Build for deploys, and uptime checks, Error Reporting and a budget alert to watch it.'
   - name: 'SQLite'
-    context: 'Seniors, sessions, stories, plans and family questions behind a storage port, with recordings on local disk.'
+    context: 'The store in development, with recordings on local disk. The same port runs on Firestore and Cloud Storage once deployed.'
   - name: 'pytest'
     context: 'Offline tests on every push, plus a live marker for tests that stream real audio at the API.'
   - name: 'Playwright'
-    context: 'Browser tests with the microphone replaced by a recorded sample, including a nightly six-minute endurance run.'
+    context: "Browser tests with the microphone replaced by a recorded sample: a judge's whole path, and a six-minute endurance run."
   - name: 'GitHub Actions'
-    context: 'Lint, types and offline tests on every push; the live evals nightly at 03:00 JST, since they run in real time and cost quota.'
-githubUrl: 'https://github.com/tpemeja/kataribe'
+    context: 'Lint, types and offline tests on every push. The live evals run by hand before a release, since they run in real time and cost Gemini credit.'
+githubUrl: 'https://github.com/kaseovo/kataribe'
+websiteUrl: 'https://kataribe.kaseovo.com'
 highlights:
-  - headline: '12 of 12 consent checks'
-    detail: "A story reaches the family only on the person's own words of agreement. A no, a hesitation or never being asked keeps it private."
-  - headline: 'Quotes checked verbatim'
-    detail: 'Every quote is matched word for word against the transcript. Anything the model paraphrased is dropped, not stored.'
-  - headline: 'Nightly live-audio evals'
-    detail: 'Synthesized Japanese streamed at the real API, an AI interviewee to spar with, and a six-minute session in a real browser.'
+  - headline: 'Live for the judges'
+    detail: 'Anyone can try it on their own life, in English, at kataribe.kaseovo.com. It stays up until judging ends.'
+    href: 'https://kataribe.kaseovo.com'
+  - headline: '36 of 36 consent checks'
+    detail: "A story reaches the family only on the person's own words of agreement. A no, a hesitation or no reply keeps it private."
+  - headline: 'Every quote checked 3 ways'
+    detail: 'Word for word in the transcript, in the right script, and heard in the recording. A quote that fails one is dropped.'
   - headline: 'Session drops traced'
     detail: "Sessions dying at two minutes were the client's own 20 s ping timeout, not the server. With it off, one ran 391 s."
 relatedNotesSlugs: []
@@ -54,26 +59,81 @@ import TechStack from '../../components/content/TechStack.astro';
 import Screenshot from '../../components/content/Screenshot.astro';
 import DecisionTable from '../../components/content/DecisionTable.astro';
 import BranchDiagram from '../../components/content/BranchDiagram.astro';
+import VideoEmbed from '../../components/content/VideoEmbed.astro';
+import SlideGallery from '../../components/content/SlideGallery.astro';
+import ProjectTimeline from '../../components/content/ProjectTimeline.astro';
 
 ## Overview
 
-<Screenshot
-  src="/images/projects/kataribe/family-page.webp"
-  alt="Family page for 田中ハル, born 1941 in Kiryu: stories grouped by life stage (childhood, marriage), each with a summary and a quote with a play button, and a granddaughter's question shown above the wedding kimono story that answered it"
-  caption="The family page. Stories are grouped by life stage, every quote plays her own voice, and a granddaughter's question sits above the story that answered it. The senior and her stories are fictional."
+<VideoEmbed
+  youtubeId="wg3SdraT2Oo"
+  title="Kataribe demo video"
+  caption="The 3:48 demo: two Japanese conversations with English subtitles, the family page Kataribe wrote from them, and my own turn on the live site in English. The grandmother is made up and every voice is AI."
 />
 
 A voice AI that talks with an elderly person in Japanese for a few minutes a
 day, and turns what they remember into a life story their family can read and
 hear. A *kataribe* (語り部) is a traditional keeper of oral history, the person
-who remembers the stories and passes them on. It is a hackathon prototype,
-built in the open with a deadline of 2026-10-18.
+who remembers the stories and passes them on.
 
 The voice is only the channel; the product is the loop. Each conversation
 becomes stories, people and places on a life timeline, the gaps in that
 timeline plan the next conversation, and relatives can send questions the
 interviewer asks next time. Nothing reaches the family until the person says
 it can.
+
+I built it in four weeks for Google Cloud's AI Builder Cup 2026, and wrote all
+of the code myself; my wife helped with the Japanese and with advice along the
+way. It is submitted, with a [live site](https://kataribe.kaseovo.com) where
+judges try it on their own life, the demo video above and a pitch deck, and
+now waits on the judges.
+
+<ProjectTimeline
+  columns={[
+    {
+      label: 'Week 1',
+      dates: 'Sep 22-28',
+      title: 'The whole loop',
+      items: [
+        { text: 'Japanese voice in the browser, and the live eval harness', date: 'Sep 22' },
+        { text: 'Conversations become stories; session two recalls session one', date: 'Sep 23' },
+        { text: 'Speaks first, asks before sharing, the family asks back', date: 'Sep 25' },
+      ],
+    },
+    {
+      label: 'Weeks 2-3',
+      dates: 'Sep 29-Oct 12',
+      title: 'Deployed',
+      items: [
+        { text: 'Pitch deck content and demo shot list', date: 'Sep 29' },
+        { text: 'Cloud Run in Tokyo, with Firestore and Cloud Storage', date: 'Oct 10' },
+        { text: 'Quotes and consent checked against the recording', date: 'Oct 11' },
+      ],
+    },
+    {
+      label: 'Week 4',
+      dates: 'Oct 13-18',
+      title: 'Ready to judge',
+      items: [
+        { text: 'Start page: judges try it on their own life', date: 'Oct 13' },
+        { text: 'kataribe.kaseovo.com, the family page as a book', date: 'Oct 14' },
+        { text: 'Demo video, deck and release eval', date: 'Oct 18' },
+        { text: 'Submitted', date: 'Oct 18', highlight: true },
+      ],
+    },
+    {
+      label: 'Judging',
+      dates: 'Oct 19-Nov 6',
+      title: 'Waiting on results',
+      upcoming: true,
+      items: [
+        { text: 'Live site kept up, checked every morning' },
+        { text: 'Code frozen at the submitted commit' },
+        { text: 'Results', date: 'after Nov 6' },
+      ],
+    },
+  ]}
+/>
 
 ## Problem
 
@@ -88,8 +148,9 @@ it can.
 - **The bugs that matter only show up live.** Configs that passed every offline
   check died on a live socket, and the 5-10 minute sessions the product needs
   are longer than any quick test.
-- **Four weeks, and native ears are scarce.** Every prompt change needs a
-  native Japanese speaker to judge it, and one is not always free.
+- **Judges arrive cold, in English.** The product is Japanese and built for one
+  senior over many sessions. A judge speaks English, talks for two minutes,
+  and must never hear another judge's childhood.
 
 ## Approach
 
@@ -97,14 +158,16 @@ Built as vertical slices: each one ends with something that runs and can be
 shown, never a half-wired layer waiting on the next.
 
 One rule runs through the code: **the AI never speaks for the person.** A
-quote is stored only if it is found word for word in the transcript, consent
-counts only as her own words of agreement, and facts we already know (her
-name, birthplace and family) are handed to the model rather than transcribed.
+quote is stored only if it is found word for word in the transcript and heard
+in the recording, consent counts only as her own words of agreement, and facts
+we already know (her name, birthplace and family) are handed to the model
+rather than transcribed.
 
 Behaviour is measured against the live API over several runs and reported as
 *n of n*, because a single good run proves little. French and English exist
-so the whole loop can be exercised without a Japanese speaker in the room, but
-only a Japanese session decides whether it works.
+so the whole loop can be exercised without a Japanese speaker in the room, and
+English is also what judges use, but only a Japanese session decides whether
+the product works.
 
 ## What I built
 
@@ -158,15 +221,16 @@ Emotional sensitivity lives in the interviewer prompt instead.
   title="Testing against the live API"
   status="done"
   goal="Test what only appears on a live socket: transcription of names, waiting through a pause, staying in the right language, and sessions as long as the product needs."
-  outcome="A nightly suite streams real audio at the live API, including a six-minute session in a real browser."
+  outcome="A live suite streams real audio at the API; the release run passed 15 of 15 browser tests and a six-minute session."
 >
 
 Two layers, split by cost:
 
 - **`make check`**, on every push: lint, types, config shape, endpoint
   validation and the resampler maths. Offline and fast.
-- **`make eval`**, nightly: synthesized Japanese streamed at the real API in
-  real time, through the same token path the browser uses. It checks the
+- **`make eval`**, by hand before a release and after any change to how the
+  interviewer speaks or listens: synthesized Japanese streamed at the real API
+  in real time, through the same token path the browser uses. It checks the
   transcript, the patience setting and the reply's rules, graded partly by
   code and partly by a model judging against the prompt itself.
 
@@ -180,14 +244,22 @@ so pauses and turn-taking are genuine. Each persona presses one rule:
 | `shigeru` | Refuses to discuss the war | drop it |
 | `kimiko` | Drifts to another subject | follow rather than steer back |
 
+The release run, before submitting:
+
+| Suite | Result |
+|---|---|
+| Browser tests, a judge's whole path included | 15 of 15 |
+| Six-minute session in a real browser | no drop |
+| Live API checks | 38 of 40, both failures traced and fixed, then 6 of 6 |
+
 <Callout variant="lesson" title="The server was never hanging up">
 Sparring sessions kept dying at 70-130 seconds with `1011 keepalive ping
 timeout`. It looked like a harness quirk, but it killed the interviewer's own
 test session too, and no test had run long enough to notice. The SDK hands
 Python's websockets library its default 20 second ping timeout, and the Live
 API does not reliably pong inside it, so the client itself hung up on a
-healthy connection. With the timeout off, one connection ran 391 seconds. The browser
-was never affected, and a nightly six-minute browser run keeps it that way.
+healthy connection. With the timeout off, one connection ran 391 seconds. The
+browser was never affected, and the six-minute browser run keeps it that way.
 </Callout>
 
 </Phase>
@@ -230,7 +302,7 @@ conversation carries on.
   title="From conversation to life story"
   status="done"
   goal="Turn each finished conversation into stories on a life timeline, find what is missing, and open the next session from it, without the model putting words in the person's mouth."
-  outcome="Every stored quote is found verbatim in the transcript, and session two opens by recalling session one."
+  outcome="Every quote is matched to the transcript and heard in the recording; session two recalls session one."
 >
 
 <BranchDiagram
@@ -245,19 +317,28 @@ conversation carries on.
   merge={{ name: 'Next session prompt', detail: 'story so far, planned questions, what to avoid' }}
 />
 
-The model is asked for the person's own words, and `verify` then looks for
-each quote in the transcript, ignoring only spacing and punctuation. A quote
-that is not there is dropped rather than kept: a memoir is the one place a
-plausible paraphrase must not end up. Stories land on six life stages, from
-childhood to later life, and the next session opens with a word about the
-last one.
+The model is asked for the person's own words, and every quote then passes
+three checks before it is stored:
+
+1. **Word for word in the transcript**, ignoring only spacing and punctuation.
+2. **Written in her language's script.** A Korean particle inside a Japanese
+   quote once passed the first check, because the transcript had it too.
+3. **Heard in the recording.** Gemini Flash listens to the clip the family
+   would hear and confirms the words. It caught the Live API writing 私は as
+   私を, unprompted, in a browser test.
+
+A quote that fails any of them is dropped rather than kept: a memoir is the
+one place a plausible paraphrase must not end up. Stories land on six life
+stages, from childhood to later life, and the next session opens with a word
+about the last one.
 
 <Callout variant="decision" title="No prompt can fix a homophone">
 佐藤茂 and 佐藤繁 both read *Shigeru*, so asking the model to be careful
-changes nothing. The fix is to stop transcribing what we already know: the
-senior's name, its reading, birth year, birthplace and family go into the
-prompt from their profile. Names outside the profile (the first boss, the
-neighbour) still have the problem.
+changes nothing, and listening to the recording cannot tell them apart either.
+The fix is to stop transcribing what we already know: the senior's name, its
+reading, birth year, birthplace and family go into the prompt from their
+profile. Names outside the profile (the first boss, the neighbour) still have
+the problem.
 </Callout>
 
 </Phase>
@@ -267,25 +348,35 @@ neighbour) still have the problem.
   title="Consent before sharing"
   status="done"
   goal="Let a story reach the family only when the person agreed to share it, and keep every other story off the family page entirely."
-  outcome="A story is shared only on her own words of agreement, found in the transcript: 12 of 12 runs."
+  outcome="A story is shared only on her own words of agreement, found in the transcript: 36 of 36 runs."
 >
 
-The interviewer asks at the end of a story whether the family may read it.
-Extraction returns the words she used to agree, and `verify` checks them
-against the transcript exactly as it checks quotes. No words, or words that
-are not there, and the story stays private. Measured against the real model,
-three runs each:
+The interviewer asks once, at the close: it names today's stories in a few
+words and asks whether the family may read them, and whether one should stay
+hers. Extraction returns the words she used to agree, and `verify` checks them
+against the transcript and the recording exactly as it checks quotes. No
+words, or words that are not there, and the story stays private.
+
+Twelve cases, measured against the real model, three runs each:
 
 | What she said | Result |
 |---|---|
-| A clear yes | shared, 3 of 3 |
-| A no | private, 3 of 3 |
-| A hesitation: 「うーん、そうですねえ……どうしましょうかねえ」 | private, 3 of 3 |
-| Never asked | private, 3 of 3 |
+| A clear yes | shared |
+| A no, or a hesitation: 「うーん、そうですねえ……どうしましょうかねえ」 | private, never asked again |
+| Yes to one story, no to another, in one sentence | each one as she said |
+| 「あの話は家族に見せないで」, about a story from last time | taken back |
+| No reply, or never asked | private, asked again at the next close |
+| **All twelve cases** | **36 of 36** |
 
 Private stories are filtered out in the query, so there is no route by which
 one arrives and is merely not rendered. A browser test checks that not a word
-of one reaches the page; the family only sees a count.
+of one reaches the page, and the page does not even show a count of them.
+
+<Screenshot
+  src="/images/projects/kataribe/family-page.webp"
+  alt="Family page for Ogawa Setsuko (小川節子), born 1944 in Gujo Hachiman: a contents column with chapters Childhood and Marriage and an English/Japanese switch, and story cards such as Jumping into the River from Shinbashi Bridge, with a link to all quotes in her own words and voice"
+  caption="The family page from the demo, read in English: only the stories she agreed to share, each with her quotes in her own voice. The story she kept leaves no trace."
+/>
 
 <Callout variant="decision" title="No endpoint writes stories">
 The browser tests need stories at a known visibility, but a write path into
@@ -305,9 +396,9 @@ test-only route.
 >
 
 <Screenshot
-  src="/images/projects/kataribe/family-question.webp"
-  alt="Ask 田中ハル something: a short explanation, a question from 孫のゆか about her wedding kimono marked Answered with a link to the story, a form for relation and name and the question, a Send question button, and a line saying one story has been kept private"
-  caption="A granddaughter's question, answered and linked to the story. The private story shows only as a count."
+  src="/images/projects/kataribe/family-questions.webp"
+  alt="Questions from the family tab: a question from granddaughter Yuka, Grandma, did you ever jump off the Shinbashi bridge?, stamped Answered with a link to the story, and a question from daughter Miho about her yukata at the Gujo Odori, stamped Waiting"
+  caption="Two questions from the demo's family. One is answered and links to the story it led to; the other waits for the next conversation."
 />
 
 The opening of the next session, with the family question in it:
@@ -322,8 +413,8 @@ The rules around it:
 - **Nothing she refused is asked, even by family.** Each question is screened
   against the avoid list before it is stored, and again whenever she refuses
   something new. A held question looks exactly like one still waiting.
-- **The answer is linked, not copied.** If she kept it private, the relative
-  sees "no reply has been shared", the same as if she declined.
+- **The answer is linked, not copied.** If she kept it private, the question
+  still reads as waiting, the same as if she declined.
 
 Against the real models: screening 3 of 3, reporting which questions were
 answered 9 of 9.
@@ -339,16 +430,86 @@ time first, then the family question), and it has held 6 of 6.
 </Phase>
 
 <Phase
-  id="ready-to-judge"
-  title="Ready to judge"
-  status="in-progress"
-  goal="Get the prototype in front of the judges by 2026-10-18: deployed, with a subtitled demo video and a pitch deck that shows the family loop rather than a person talking to a device."
-  outcome="Target: deployed, with a subtitled demo video and pitch deck, by 2026-10-18."
+  id="judges-try-it"
+  title="Try it on your own life"
+  status="done"
+  goal="Let a judge who speaks no Japanese run the whole loop on their own life in a few minutes: talk, decide what to share, and read the result, without ever meeting another judge's stories."
+  outcome="A judge talks about their own life in English and reads it on their own family page in about three minutes."
 >
 
-- **Pitch deck:** content written and versioned in the repo.
-- **Demo video:** shot list written; recording and English subtitles to do.
-- **English dev view and deployment:** to do.
+<Screenshot
+  src="/images/projects/kataribe/start-page.webp"
+  alt="The Kataribe start page: the headline Every grandparent has stories nobody has asked about yet, buttons Watch it, See a life story and Try it on your own life, the embedded demo video, a Who it's for section with tabs For them, For their family and For their town marked Next, and a Your path through Kataribe card listing five steps with Go buttons"
+  caption="The start page at kataribe.kaseovo.com, with the demo video and the judge's path in the corner."
+/>
+
+What the start page does for a stranger:
+
+- **A persona of their own.** Memory is per person, so with one shared persona
+  the second judge would be greeted with the first judge's childhood. *Try it*
+  asks for a name and makes a visitor whose link is 128 random bits. Talk
+  again, and it remembers.
+- **A path in the corner.** Watch the demo, read its family page, see a
+  family question, talk, read your own page. Each step ticks itself off, and
+  *Go* takes you there from any page.
+- **A close that fits two minutes.** At two minutes the interviewer asks
+  whether to go on. When they stop, it asks one thing, alone in its turn: may
+  the family read today's story. *Keep it private* on screen beats a spoken
+  yes; *Share* never beats a spoken no.
+- **A read-only example.** The demo's family page shows the question form, but
+  nothing is sent from it, so judges never read each other's questions.
+- **A cap.** 30 visitor conversations a day at about $0.10 each, so the worst
+  case over the whole evaluation stays under $60.
+
+<Callout variant="lesson" title="The sharing question got lost in the goodbye">
+Trying it as a judge, the interviewer asked a question, thanked me, asked
+whether the family could read the story and said goodbye, all in one turn.
+My reply was "So do you want to... make it private or not?", and the buttons
+to choose only appeared on the end screen. Now the question gets a turn of its
+own, and the buttons show from that moment.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="ready-to-judge"
+  title="Shipped and submitted"
+  status="done"
+  goal="Meet every submission rule of the AI Builder Cup by 2026-10-18, and keep the live site working for every judge until judging ends on 2026-11-06."
+  outcome="Submitted with a live Cloud Run URL, a 3:48 demo video and a pitch deck; waiting on the judges."
+>
+
+| The rule asks for | What we submitted |
+|---|---|
+| A live URL on Google Cloud | [kataribe.kaseovo.com](https://kataribe.kaseovo.com), on Cloud Run in Tokyo with Firestore and Cloud Storage |
+| A public 3-4 minute video showing it working | [3:48 on YouTube](https://youtu.be/wg3SdraT2Oo): two Japanese conversations with English subtitles, the family page they became, and my own turn on the live site |
+| A PDF deck with architecture and business case | 15 slides, built by a python-pptx script on the contest's template, so the wording is versioned with the code |
+| A public repository, in English | [kaseovo/kataribe](https://github.com/kaseovo/kataribe), the submitted commit tagged; Japanese prompts carry English glosses |
+
+Six of the deck's slides:
+
+<SlideGallery
+  href="https://github.com/kaseovo/kataribe/blob/main/docs/demo/kataribe-pitch-deck.pdf"
+  linkLabel="The full pitch deck (PDF)"
+  slides={[
+    { src: '/images/projects/kataribe/deck-02.webp', alt: 'Slide: Brief about the idea. Kataribe, every grandparent has stories nobody has asked about yet, with 6.72M people aged 65 and over living alone in Japan and ¥220,000 for a professionally written self-history', caption: 'The idea, and the ¥220,000 it replaces' },
+    { src: '/images/projects/kataribe/deck-05.webp', alt: 'Slide: process flow. Talk, Write, Check, Share, Plan, then the next conversation, with the family asking back and screened questions', caption: 'The loop: talk, write, check, share, plan' },
+    { src: '/images/projects/kataribe/deck-07.webp', alt: "Slide: architecture. The senior's screen and family page talk to FastAPI on Cloud Run in Tokyo, which mints the Live token and uses Firestore, Cloud Storage, Gemini Live and Gemini Flash", caption: 'Architecture on Google Cloud' },
+    { src: '/images/projects/kataribe/deck-09.webp', alt: 'Slide: estimated cost. About $0.13 per 10-minute conversation at list prices, about ¥6,900 for a year of daily conversations, with a per-item breakdown', caption: 'About $0.13 a conversation' },
+    { src: '/images/projects/kataribe/deck-11.webp', alt: 'Slide: performance report. 36 of 36 consent cases, 12 of 12 recording checks, 3 of 3 judge paths on the live service, and a six-minute session with no drop, plus the patience table', caption: 'What was measured, n of n' },
+    { src: '/images/projects/kataribe/deck-14.webp', alt: 'Slide: community benefit and business case. For them, for their family, for their town next, and who pays: families, municipalities and care providers', caption: 'Who it is for, and who pays' },
+  ]}
+/>
+
+Kept running through the evaluation:
+
+- **One instance stays warm** until 2026-11-06, since a cold start took 4.6 s.
+- **Watched** by an uptime check, error emails and a budget alert, plus
+  `make smoke` every morning: a judge's whole path on the live service,
+  because a health check cannot see a Gemini key that stopped working.
+- **Frozen.** The submitted commit is what runs; only an outage gets a fix.
+- **Forgotten afterwards.** Every visitor persona is deleted on 2026-11-07,
+  as the start page promises.
 
 <DecisionTable
   decisions={[
@@ -359,13 +520,27 @@ time first, then the family question), and it has held 6 of 6.
       why: "Lighting and angle decide whether face detection works on camera, and a judge watching someone talk to a device sees a companion app. The family loop is what makes this different.",
     },
     {
+      label: 'The demo grandmother',
+      chose: 'A made-up person, voiced by Gemini text-to-speech',
+      insteadOf: 'A live take with someone playing her',
+      why: 'The interviewer asks what an invented person cannot answer. Her family page is still the real pipeline run on both conversations, and the video says she is made up.',
+    },
+    {
       label: 'Working language',
-      chose: 'Keep testing in French',
+      chose: 'Keep testing in French and English',
       insteadOf: 'Wait for a native Japanese review',
-      why: 'French exercises most of the behaviour and does not block on a speaker being free. What only Japanese can show stays unjudged until the review happens.',
+      why: 'They exercise most of the behaviour and do not block on a speaker being free. What only Japanese can show stays unjudged until the review happens.',
     },
   ]}
 />
+
+<Callout variant="warning" title="A spending cap belongs to the project, not the key">
+The live eval had a Gemini key of its own so testing could not use up what
+judges need. The release run then hit the AI Studio project's monthly spending
+cap, which both keys share, and every Gemini call stopped, the live site's
+included, until the cap was raised. The uptime check stayed green, since the
+health endpoint calls no model.
+</Callout>
 
 </Phase>
 
@@ -379,17 +554,21 @@ What each piece of the stack is actually doing, and where to look for more:
 
 ## Future improvements
 
-- **Native Japanese review.** Prompt changes have gone unreviewed in the
-  language that ships. Whether a light restatement like 〜なんですね reads as
-  warm aizuchi or as parroting is a native speaker's call.
-- **Names outside the profile.** A name heard once could be stored in kana as
-  it was heard rather than in kanji the model picked, and a relative could fix
-  the spelling in one tap from the family page.
+- **Native Japanese review.** The demo was voiced by AI and judges talk in
+  English, so prompt changes have gone unreviewed in the language that ships.
+  Whether a light restatement like 〜なんですね reads as warm aizuchi or as
+  parroting is a native speaker's call.
+- **Names heard only aloud.** A name outside the profile can still be
+  misheard, and once even the person's own name, after they introduced
+  themselves. The interviewer should hold to the profile's name over what it
+  hears, and a relative could fix a spelling in one tap.
 - **Exact audio for each quote.** The Live API accepts `word_timestamp` and
-  returns no word offsets, so a quote's play button seeks to where the previous
-  turn ended. A transcription pass over the stored recording would make it
+  returns no word offsets, so a quote's clip runs from one interviewer turn to
+  the next. A transcription pass over the stored recording would make it
   exact.
 - **Presence detection.** The tablet noticing someone sitting nearby and
   inviting them, instead of a button.
-- **The family page in Japanese, and notifications.** Its chrome is still
-  English, and relatives have to come back to see whether an answer landed.
+- **Sharing beyond the family.** The start page already marks it *Next*: the
+  teller choosing a friend, a care worker or a local archive as readers.
+- **Notifications.** Relatives have to come back to see whether an answer
+  landed.

@@ -105,6 +105,9 @@ Alongside the visuals, at most one `<Callout>` per phase.
 - `ObjectDiagram` / `NetworkDiagram`: a structure, or a model's layers.
 - `DecisionTable`: the choices that shaped the design, with what was rejected and why. The default when a phase is about judgement.
 - `ConfidenceIntervalChart`, `WinTieLossBar`, `SweepChart`, `PercentBars`: measured results.
+- `VideoEmbed`: a YouTube demo, lazy-loaded from youtube-nocookie. Best as the Overview hero when the project has a demo video.
+- `SlideGallery`: a grid of slide images with a link to the full deck.
+- `ProjectTimeline`: week (or stage) columns, each a card listing what shipped in it, with an optional dashed column for what is still to come. For a project with a fixed deadline; every date must trace to a commit or a record.
 - `Callout`: `lesson` for something transferable you got wrong, `decision` for a choice needing more room than a table row, `warning` for a trap in someone else's system.
 
 ### Where cut material goes

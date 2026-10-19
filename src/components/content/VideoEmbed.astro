@@ -1,0 +1,65 @@
+---
+interface Props {
+  youtubeId: string;
+  title: string;
+  caption?: string;
+}
+
+const { youtubeId, title, caption } = Astro.props;
+---
+
+<figure class="not-prose video-embed">
+  <div class="video-frame">
+    <iframe
+      src={`https://www.youtube-nocookie.com/embed/${youtubeId}?rel=0`}
+      title={title}
+      loading="lazy"
+      allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+      referrerpolicy="strict-origin-when-cross-origin"
+      allowfullscreen></iframe>
+  </div>
+  {
+    caption && (
+      <figcaption>
+        {caption}{' '}
+        <a href={`https://youtu.be/${youtubeId}`} target="_blank" rel="noopener">
+          Watch on YouTube ↗
+        </a>
+      </figcaption>
+    )
+  }
+</figure>
+
+<style>
+  .video-embed {
+    margin-block: 1.5rem;
+  }
+
+  .video-frame {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    overflow: hidden;
+    background-color: var(--color-bg-subtle);
+  }
+
+  .video-frame iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+
+  .video-embed figcaption {
+    margin-top: 0.6rem;
+    font-size: 0.8125rem;
+    color: var(--color-fg-muted);
+  }
+
+  .video-embed figcaption a {
+    color: var(--color-accent);
+    white-space: nowrap;
+  }
+</style>

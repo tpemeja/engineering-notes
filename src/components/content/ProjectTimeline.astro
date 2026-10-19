@@ -1,0 +1,185 @@
+---
+interface Item {
+  text: string;
+  date?: string;
+  highlight?: boolean;
+}
+
+interface Column {
+  label: string;
+  dates: string;
+  title: string;
+  items: Item[];
+  upcoming?: boolean;
+}
+
+interface Props {
+  columns: Column[];
+}
+
+const { columns } = Astro.props;
+---
+
+<figure class="not-prose project-timeline">
+  <ol class="pt-columns" style={`--pt-count: ${columns.length}`}>
+    {
+      columns.map((col) => (
+        <li class="pt-column" data-upcoming={col.upcoming ? '' : undefined}>
+          <div class="pt-bar" aria-hidden="true" />
+          <p class="pt-label">{col.label}</p>
+          <p class="pt-dates">{col.dates}</p>
+          <p class="pt-title">{col.title}</p>
+          <ul class="pt-items">
+            {col.items.map((item) => (
+              <li data-highlight={item.highlight ? '' : undefined}>
+                <span class="pt-text">{item.text}</span>
+                {item.date && <span class="pt-date">{item.date}</span>}
+              </li>
+            ))}
+          </ul>
+        </li>
+      ))
+    }
+  </ol>
+</figure>
+
+<style>
+  .project-timeline {
+    margin-block: 1.75rem;
+  }
+
+  .pt-columns {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(var(--pt-count), minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  @media (max-width: 860px) {
+    .pt-columns {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 480px) {
+    .pt-columns {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .pt-column {
+    position: relative;
+    padding: 1.1rem 0.9rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    background-color: var(--color-bg-subtle);
+    overflow: hidden;
+  }
+
+  .pt-column[data-upcoming] {
+    background-color: transparent;
+    border-style: dashed;
+  }
+
+  .pt-bar {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 3px;
+    background-color: var(--color-accent);
+  }
+
+  .pt-column[data-upcoming] .pt-bar {
+    background-image: repeating-linear-gradient(
+      90deg,
+      var(--color-fg-muted) 0 6px,
+      transparent 6px 12px
+    );
+    background-color: transparent;
+    opacity: 0.6;
+  }
+
+  .pt-label {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-accent);
+  }
+
+  .pt-column[data-upcoming] .pt-label {
+    color: var(--color-fg-muted);
+  }
+
+  .pt-dates {
+    margin: 0.1rem 0 0;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--color-fg-muted);
+  }
+
+  .pt-title {
+    margin: 0.6rem 0 0.5rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--color-fg);
+  }
+
+  .pt-items {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .pt-items li {
+    position: relative;
+    padding-left: 0.85rem;
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    color: var(--color-fg);
+  }
+
+  .pt-items li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.45em;
+    width: 0.35rem;
+    height: 0.35rem;
+    border-radius: 999px;
+    background-color: var(--color-fg-muted);
+  }
+
+  .pt-column[data-upcoming] .pt-items li {
+    color: var(--color-fg-muted);
+  }
+
+  .pt-column[data-upcoming] .pt-items li::before {
+    background-color: transparent;
+    border: 1px solid var(--color-fg-muted);
+  }
+
+  .pt-items li[data-highlight] {
+    font-weight: 600;
+  }
+
+  .pt-items li[data-highlight]::before {
+    background-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 25%, transparent);
+  }
+
+  .pt-date {
+    display: block;
+    margin-top: 0.05rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    color: var(--color-fg-muted);
+  }
+</style>
