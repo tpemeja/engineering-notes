@@ -1,6 +1,6 @@
 ---
-title: 'Instagram Dashboard'
-description: 'Website on top of the Instagram Agent, behind Google sign-in: account growth and post trends, comment topics, AI-reviewed comments and DMs to handle in sync with the tablet, and a weekly digest email.'
+title: 'Insight Dashboard'
+description: 'Website on top of the Instagram Agent, behind Google sign-in: account growth and post trends, comment topics, AI-reviewed comments and DMs to handle in sync with the tablet, a media kit, and a weekly digest email. It is also where Claude and ChatGPT sign in to read the media kit.'
 tagline: "Web dashboard for an Instagram account's growth, comments and DMs"
 category: 'Social media automation'
 active: true
@@ -10,6 +10,7 @@ technologies:
     'React',
     'TypeScript',
     'FastAPI',
+    'OAuth 2.1',
     'AWS Lambda',
     'CloudFront',
     'Amazon SES',
@@ -24,13 +25,15 @@ technologyNotes:
   - name: 'Vite'
     context: 'Dev server with an /api proxy, so local development runs on one origin like production does. A demo mode builds the same app around an in-browser fake API.'
   - name: 'FastAPI'
-    context: 'The backend: Google sign-in, signed session cookie, and a proxy to the agent that holds the management token.'
+    context: 'The backend: Google sign-in, signed session cookie, a proxy to the agent that holds the management token, and the OAuth server for AI apps.'
   - name: 'Google OAuth'
     context: 'Sign in with Google through the authorization-code flow with PKCE, run server-side, for a list of invited emails.'
+  - name: 'OAuth 2.1'
+    context: 'The authorization server MCP clients sign in to: dynamic client registration, PKCE (S256), a consent page and RFC 9207 issuer, with nothing stored.'
   - name: 'AWS Lambda'
     context: 'Two functions from one package: the API behind API Gateway, and the weekly digest. The API runs at 1024 MB and ships precompiled bytecode.'
   - name: 'S3 + CloudFront'
-    context: 'Static hosting for the SPA; the bucket blocks all public access and is only readable through Origin Access Control.'
+    context: "Static hosting for the SPA; the bucket blocks all public access and is only readable through Origin Access Control. CloudFront also forwards /mcp to the agent, so AI apps connect at the dashboard's own address."
   - name: 'Secrets Manager'
     context: 'Holds the management token, Google client secret and session key, read at runtime rather than set as Lambda env vars.'
   - name: 'SES + EventBridge Scheduler'
@@ -46,8 +49,9 @@ highlights:
   - headline: 'Public demo, no backend'
     detail: 'The same frontend answers every request in the browser from a made-up account, and its CSP blocks the real API.'
     href: 'https://dashboard-demo.kaseovo.com'
-  - headline: 'In sync with the tablet'
-    detail: 'A comment handled on the website drops off the tablet, and the other way round, through one shared table.'
+  - headline: 'Sign-in for Claude, ChatGPT'
+    detail: 'An OAuth 2.1 server lets AI apps sign in with Google for a read-only media-kit token, with nothing stored.'
+    href: '#ai-app-sign-in'
   - headline: 'Imports 518 → 222 ms'
     detail: "Shipping precompiled bytecode in the Lambda package more than halved the backend's import time on a cold start."
 relatedNotesSlugs: []
@@ -76,9 +80,11 @@ top of the [Instagram Agent](/projects/instagram-agent/). The
 stuck on a wall. This is the same data on a phone or a laptop, with more room
 for tables and for handling comments and DMs.
 
-It has six pages: Insights, Posts, Trends, Comments, Topics and Events. A
-reply, hide, delete or DM goes through the agent, and lands in the same
-action table the tablet reads. A weekly digest email sums up the week, and a
+It has six pages: Insights, Posts, Trends, Comments, Topics and Events, with
+the media kit and the digest one icon away. A reply, hide, delete or DM goes
+through the agent, and lands in the same action table the tablet reads. The
+media kit is also what Claude and ChatGPT can read, once someone signs them
+in here. A weekly digest email sums up the week, and a
 [public demo](https://dashboard-demo.kaseovo.com) runs the same frontend on a
 made-up cooking account.
 
@@ -89,7 +95,8 @@ made-up cooking account.
   could pull it out.
 - **The site is on the public internet.** It has to be reachable from
   anywhere, but stay private to a few invited people, with no account system
-  to build or run.
+  to build or run. AI chat apps need a way in too, and none of them can hold
+  a pasted token.
 - **Two clients, one to-do list, and a third that keeps no record.** A
   comment answered on the tablet must not still show as "to handle" on the
   website, and a reply written in the Instagram app records nothing at all.
@@ -452,6 +459,69 @@ What keeps it harmless even if its code changes:
   API's CORS and Origin checks accept only the real dashboard.
 - **The Cloudflare token** belongs to a `demo` environment that only `main`
   may deploy to, and only the deploy step sees it.
+
+</Phase>
+
+<Phase
+  id="media-kit"
+  title="Media kit"
+  status="done"
+  goal="Show the figures a brand asks for before a collaboration on one page, exactly as the agent's media-kit API serves them, so whatever a brand is sent can be checked against it."
+  outcome="The 30-day figures, follower audience and top Reels on one page, with the raw API response to copy."
+>
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/media-kit.webp"
+  alt="Media kit page: followers with the 30-day gain, accounts reached with accounts engaged, views and engagement rate, then saves, shares, likes and comments"
+  caption="The top of the media kit: Meta's own totals over the last 30 days. The audience and the top Reels sit below. Fictional data."
+/>
+
+- **Unknown gender stays in the split.** Women's share of the followers
+  whose gender is known sits beside it, since that is the figure brand PDFs
+  usually quote without saying unknowns were left out.
+- **The audience is labelled followers**, because that is all Meta reports
+  about who the account reaches.
+- **Top Reels are ranked by lifetime views**, with their saves, shares and
+  likes.
+- **The raw JSON** sits under the figures with a Copy button, and the demo
+  answers the route with a made-up kit.
+
+</Phase>
+
+<Phase
+  id="ai-app-sign-in"
+  title="Sign-in for AI apps"
+  status="done"
+  goal="Let claude.ai, Claude Desktop and ChatGPT reach the agent's media-kit MCP tool when none of them can send a pasted token, without giving any other website a way to get one for its visitors."
+  outcome="AI apps sign in with Google and get a 90-day, read-only media-kit token; the backend stores nothing."
+>
+
+<Screenshot
+  src="/images/projects/instagram-dashboard/connect-ai-apps.webp"
+  alt="Use it in ChatGPT or Claude card: a name and a URL with copy buttons, a note that authentication is OAuth with Google sign-in, and three numbered steps each for Claude and ChatGPT"
+  caption="The media kit page says what to type where: one name, one URL, OAuth, and the steps in each app."
+/>
+
+The backend is the OAuth 2.1 authorization server the
+[agent's MCP endpoint](/projects/instagram-agent/#media-kit-mcp) names.
+Once the URL is added in the app:
+
+1. It registers itself at `/oauth/register` (dynamic client registration).
+2. `/oauth/authorize` sends anyone signed out through Google first, against
+   the same invited list.
+3. A consent page names the app and what it will see. **Allow** returns a
+   one-minute code.
+4. `/oauth/token` trades the code and its PKCE verifier for a media-kit
+   token the agent mints for that person.
+
+What keeps it narrow:
+
+- **Only apps returning to chatgpt.com, claude.ai / claude.com or
+  loopback can register**, so no website can get a token for a visitor.
+- **The consent page cannot be framed**, and its form needs the session,
+  its own origin and a signed token bound to the person it was shown to.
+- **Nothing is stored.** Client ids, consent forms and codes are JWTs under
+  their own audiences; the agent is what refuses a second token for a code.
 
 </Phase>
 

@@ -1,6 +1,6 @@
 ---
 title: 'Instagram Agent'
-description: 'Serverless AWS backend for one Instagram Creator account: it ingests Meta webhooks, tags comments and drafts replies to them and to DMs with an LLM, polls post insights on an age-decaying schedule, and serves it all through one API.'
+description: 'Serverless AWS backend for one Instagram Creator account: it ingests Meta webhooks, tags comments and drafts replies to them and to DMs with an LLM, polls post insights on an age-decaying schedule, and serves it all through one API, plus a daily media kit that Claude and ChatGPT read over MCP.'
 tagline: 'Serverless AWS backend drafting replies to Instagram comments and DMs'
 category: 'Social media automation'
 active: true
@@ -13,38 +13,43 @@ technologies:
     'DynamoDB',
     'Aurora DSQL',
     'Gemini',
+    'MCP',
     'Terraform',
   ]
 technologyNotes:
   - name: 'Python'
     context: 'All four Lambdas, the operator scripts and the tests, strictly typed with mypy.'
   - name: 'FastAPI'
-    context: 'The management API: metrics, comments, analyses, the action audit trail, the Instagram proxy, translations and post ideas.'
+    context: 'The management API: metrics, comments, analyses, the action audit trail, the Instagram proxy, translations, post ideas and the media kit.'
   - name: 'AWS Lambda'
     context: 'Four functions (webhook, processor, poller, query API), each packaged with only its own dependencies and precompiled bytecode, on arm64.'
+  - name: 'API Gateway'
+    context: 'Fronts the query API, rate-limited to 10 requests a second (bursts of 20) so a flood cannot take the Lambda concurrency the webhook needs.'
   - name: 'SQS'
     context: 'Decouples webhook ingestion from analysis, with a dead-letter queue, per-message batch failures and delayed retries when Gemini is overloaded.'
   - name: 'DynamoDB'
-    context: 'Event metadata and idempotency claims, plus dense metric samples (90-day TTL) and the due-gate the poller reads first.'
+    context: 'Event metadata and idempotency claims, dense metric samples (90-day TTL), the due-gate the poller reads first, and single-use claims on OAuth codes.'
   - name: 'Aurora DSQL'
-    context: 'Postgres-compatible storage for analyses, actions and one immutable row per day, billed per request with nothing for idle time.'
+    context: 'Postgres-compatible storage for analyses, actions, one immutable row per day and the daily media kit, billed per request with nothing for idle time.'
   - name: 'S3'
     context: 'Raw webhook payloads and a daily bundle of raw Graph responses, kept because insights cannot be fetched again later.'
   - name: 'Gemini'
     context: 'Structured-output analysis on Gemini Flash-Lite for comments and DM conversations, plus on-demand translations and post ideas.'
+  - name: 'MCP'
+    context: 'The media kit as one read-only tool over Streamable HTTP, written out by hand, with OAuth protected resource metadata so AI apps can sign in.'
   - name: 'Terraform'
     context: 'The whole stack, deployed from GitHub Actions through an OIDC role scoped to this project.'
   - name: 'pytest + moto'
-    context: '512 tests; the full webhook to SQS to processor to API path runs in-process against mocked AWS, and Postgres tests go through the production DSQL adapter.'
+    context: '551 tests; the full webhook to SQS to processor to API path runs in-process against mocked AWS, and Postgres tests go through the production DSQL adapter.'
 highlights:
   - headline: '$57/month DB to free tier'
     detail: 'Aurora DSQL replaced an Aurora cluster that never paused under a five-minute poller; usage now fits the free tier.'
+  - headline: 'In Claude and ChatGPT'
+    detail: 'The media kit is an MCP tool AI apps sign in to with Google: read-only, one account, revocable in one deploy.'
   - headline: 'AI drafts, a human sends'
     detail: 'The LLM only suggests an action and a reply. Nothing reaches Instagram without someone confirming it.'
-  - headline: 'Token never leaves AWS'
-    detail: 'The poller is the only identity that rotates it; clients act through seven scoped, audited proxy routes.'
-  - headline: 'Silent API failures mapped'
-    detail: 'Every Graph metric was checked against the live API first, since wrong calls return HTTP 200 with no data.'
+  - headline: 'Reach within 0.9% of app'
+    detail: "Media kit totals were checked against Instagram's own app; adding up daily reach instead overstates it by a fifth."
 relatedNotesSlugs: ['instagram-webhooks-vs-polling', 'meta-graph-api-live-mode-comments']
 order: 20
 ---
@@ -65,12 +70,14 @@ to stop the [Instagram Insight](/projects/instagram-insight/) tablet from being 
 only place the account's history lived, and grew into the one service
 everything else talks to.
 
-It does four things: it receives Meta's webhooks for comments and messages,
-asks an LLM what each comment needs and drafts a reply, polls post and
-account insights on a schedule, and exposes all of it through one API. The
-tablet and the [Instagram Dashboard](/projects/instagram-dashboard/) website
-are both clients of it. Everything scales to zero, so it costs close to
-nothing when nothing is happening.
+It receives Meta's webhooks for comments and messages, asks an LLM what each
+comment needs and drafts a reply, polls post and account insights on a
+schedule, and exposes all of it through one API. Once a day it also builds a
+media kit, the figures a brand asks for, which Claude and ChatGPT can read
+as an MCP tool. The tablet and the
+[Insight Dashboard](/projects/instagram-dashboard/) website are both
+clients of it. Everything scales to zero, so it costs close to nothing when
+nothing is happening.
 
 <BranchDiagram
   source={{ name: 'Instagram / Meta', detail: 'pushes webhooks, answers Graph API calls' }}
@@ -80,7 +87,7 @@ nothing when nothing is happening.
     { name: 'EventBridge → Poller', detail: 'what every post looks like now: insights, followers, audience' },
   ]}
   mergeLabel="read out-of-band, never on either critical path"
-  merge={{ name: 'Query API', detail: 'serves the tablet and the dashboard, and proxies writes back to Instagram' }}
+  merge={{ name: 'Query API', detail: 'serves the tablet, the dashboard and AI apps over MCP, and proxies writes back to Instagram' }}
 />
 
 Screenshots on this page come from the dashboard and use a fictional account.
@@ -92,14 +99,17 @@ Screenshots on this page come from the dashboard and use a fictional account.
   that would ever exist. A factory reset would lose them for good.
 - **Meta's API fails silently.** The wrong parameter shape returns HTTP 200
   with an empty `data: []`, never an error. A schema built on a guess would
-  store nothing and look healthy.
+  store nothing and look healthy, and a 30-day reach added up from daily
+  rows counts a returning viewer once per day.
 - **Scale-to-zero fights a five-minute schedule.** Aurora Serverless only
   pauses after five minutes with no query, so a poller that touches Postgres
   every few minutes keeps it awake, and billed, all month.
 - **Replies are published under someone else's name.** An LLM can suggest,
   but a wrong reply or a wrong delete on a real account cannot be undone.
-- **The token is hard to replace.** Losing it means a browser consent flow
-  that needs the account owner in person, so exactly one thing may rotate it.
+- **Tokens are hard to replace and easy to over-grant.** Losing the
+  Instagram token means a browser consent flow that needs the account owner
+  in person, so exactly one thing may rotate it. An AI app given the media
+  kit must see nothing else, and lose access without logging out the tablet.
 
 ## Approach
 
@@ -109,7 +119,7 @@ A write to Instagram only happens when a client calls the proxy after a
 person confirms. The same split runs through the data: a decision is always
 reproducible from what was stored (prompt version, policy version, raw
 response), and "not measured" is `null`, never `0`, so a gap never reads
-as a real zero.
+as a real zero. The MCP tool tells the model the same thing.
 
 I verified every Graph API behavior against the live account before
 designing a table around it, with a spike script whose raw responses are
@@ -471,6 +481,108 @@ The bytecode fix is the same read-only `/var/task` trap the
 package script deleted every `__pycache__` and never compiled any. The
 webhook, processor and poller stay at 256 MB, and all of it stays inside the
 free tier at this traffic.
+
+</Phase>
+
+<Phase
+  id="media-kit"
+  title="Media kit"
+  status="done"
+  goal="Answer what a brand asks before a collaboration (reach, engagement, audience, best Reels) with figures that match Instagram's own app, without spending the Graph rate limit on every request."
+  outcome="A daily stored media kit that matches Instagram's app: views within 0.1%, reach within 0.9%."
+>
+
+The daily roll-up builds the kit and stores it whole, one row per day.
+`GET /accounts/{id}/media-kit` reads that row and never calls Graph, so
+asking for it costs no rate limit, and a figure quoted to a brand can be
+rebuilt from the day it was taken.
+
+| Section | What it holds |
+|---|---|
+| `performance` | Meta's own 30-day totals: accounts reached and engaged, views, interactions, likes, comments, saves, shares, and engagement rate (interactions over reach) |
+| `audience` | Followers by age, gender and country, unknown gender kept in. Meta's breakdowns of the reached and engaged accounts come back empty |
+| `top_reels` | The ten Reels with the most lifetime views, with a current thumbnail added when served, since a stored CDN link expires within days |
+| `account` | Followers now and at the window's start, and the first post's date |
+
+- **Its own token.** Tied to one account, 90 days by default, refused on
+  every other route. Its key is derived from the shared secret and a
+  generation number, so bumping the number revokes every media-kit token
+  without logging out the dashboard or the tablet.
+- **Rate-limited at API Gateway**, so a flood is turned away before it
+  takes the Lambda concurrency the webhook needs.
+
+<Callout variant="lesson" title="Unique counts do not add up">
+  A daily reach row counts each account once that day, so thirty of them
+  added up count a returning viewer up to thirty times: about a fifth above
+  Instagram's own figure for the same window. Asked for over the whole
+  window instead, reach lands within 0.9% of the app, and views,
+  interactions and accounts engaged within 0.1%.
+</Callout>
+
+</Phase>
+
+<Phase
+  id="media-kit-mcp"
+  title="Media kit over MCP"
+  status="done"
+  goal="Let someone ask Claude or ChatGPT about the account's reach and audience in a chat, with the model reading the real figures rather than guessing, and reaching nothing but the media kit."
+  outcome="Claude and ChatGPT read the media kit through one read-only MCP tool, with a token scoped to it alone."
+>
+
+`POST /mcp` serves one tool, `get_media_kit(as_of?, top_reels?)`. It takes
+media-kit tokens only, and the account comes from the token's own claim, so
+nothing the model sends can name another one.
+
+<BranchDiagram
+  source={{ name: 'AI app', detail: 'Claude Code, claude.ai, Claude Desktop, ChatGPT' }}
+  branchLabel="two ways to hold a media-kit token"
+  branches={[
+    { name: 'Pasted header', detail: 'Claude Code: a minted token, sent as a Bearer header' },
+    { name: 'OAuth sign-in', detail: 'the chat apps: a 401 points to the dashboard, where the person signs in with Google' },
+  ]}
+  mergeLabel="the same kind of token either way"
+  merge={{ name: 'POST /mcp', detail: 'get_media_kit, for the one account the token names' }}
+/>
+
+The `401` names the protected resource metadata (RFC 9728), which names
+the [dashboard's backend](/projects/instagram-dashboard/#ai-app-sign-in) as
+the authorization server. Once the person allows the app, that backend asks
+the agent to mint an ordinary media-kit token, passing the authorization
+code's id as a single-use key: a conditional DynamoDB write, so a code
+mints one token, ever.
+
+The tool's description tells the model how to read the figures, since it
+will quote them to someone:
+
+- reach counts each account once across the window;
+- the audience is followers, not the accounts reached;
+- gender `U` is unknown, so "% women" without it is a different figure;
+- a `null` means Meta did not report it, never zero.
+
+<DecisionTable
+  decisions={[
+    {
+      label: 'Transport',
+      chose: 'Streamable HTTP written out by hand: stateless, JSON only, no event stream',
+      insteadOf: "The MCP SDK's server",
+      why: 'One read-only tool in a Lambda that lives for one request needs no sessions or streaming, and the SDK would add to a cold start that already dominates load time.',
+    },
+    {
+      label: 'Hosting',
+      chose: 'A remote endpoint on the query API',
+      insteadOf: 'A local stdio server',
+      why: 'The stdio script needed a checkout of this private repo on every machine. A URL works from any app.',
+    },
+  ]}
+/>
+
+<Callout variant="warning" title="An MCP client checks the discovery document against the URL it used">
+  People connect at `dashboard.kaseovo.com/mcp`, which CloudFront forwards
+  to the agent, and a client refuses metadata naming a resource other than
+  the URL it connected to. The forwarder adds `X-Public-Base` with its own
+  address, believed only from an allow-list, so each address describes
+  itself.
+</Callout>
 
 </Phase>
 
