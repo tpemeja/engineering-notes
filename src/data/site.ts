@@ -2,7 +2,7 @@ export const site = {
   title: 'Tanguy PEMEJA',
   tagline: 'A public engineering notebook',
   description:
-    "Projects, journal entries, and technical notes documented in public: what I'm building, what I'm learning, and the decisions along the way.",
+    "Projects and technical notes documented in public: what I'm building, what I'm learning, and the decisions along the way.",
   url: 'https://engineering.kaseovo.com',
   author: 'Tanguy PEMEJA',
   githubUser: 'tpemeja',
@@ -48,7 +48,6 @@ export const profile = {
 
 export const nav = [
   { label: 'Projects', href: '/projects/' },
-  { label: 'Journal', href: '/journal/' },
   { label: 'Notes', href: '/notes/' },
   { label: 'Now', href: '/now/' },
   { label: 'About', href: '/about/' },

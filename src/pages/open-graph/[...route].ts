@@ -2,17 +2,12 @@ import { getCollection } from 'astro:content';
 import { OGImageRoute } from 'astro-og-canvas';
 import { site } from '../../data/site';
 
-const [projects, journal, notes] = await Promise.all([
-  getCollection('projects'),
-  getCollection('journal'),
-  getCollection('notes'),
-]);
+const [projects, notes] = await Promise.all([getCollection('projects'), getCollection('notes')]);
 
 const pages = {
   default: { title: site.title, description: site.description },
   ...Object.fromEntries(projects.map((entry) => [`projects/${entry.id}`, entry.data])),
-  ...Object.fromEntries(journal.map((entry) => [`journal/${entry.id}`, { title: entry.data.title, description: entry.data.summary }])),
-  ...Object.fromEntries(notes.map((entry) => [`notes/${entry.id}`, { title: entry.data.title, description: `${entry.data.category} — ${site.title}` }])),
+  ...Object.fromEntries(notes.map((entry) => [`notes/${entry.id}`, { title: entry.data.title, description: entry.data.summary }])),
 };
 
 export const { getStaticPaths, GET } = await OGImageRoute({

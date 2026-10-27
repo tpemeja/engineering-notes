@@ -2,17 +2,15 @@
 import type { CollectionEntry } from 'astro:content';
 import ProjectCard from './ProjectCard.astro';
 import NoteCard from './NoteCard.astro';
-import JournalEntryCard from './JournalEntryCard.astro';
 
 interface Props {
   title?: string;
   projects?: CollectionEntry<'projects'>[];
   notes?: CollectionEntry<'notes'>[];
-  journal?: CollectionEntry<'journal'>[];
 }
 
-const { title = 'Related', projects = [], notes = [], journal = [] } = Astro.props;
-const hasContent = projects.length > 0 || notes.length > 0 || journal.length > 0;
+const { title = 'Related', projects = [], notes = [] } = Astro.props;
+const hasContent = projects.length > 0 || notes.length > 0;
 ---
 
 {
@@ -25,9 +23,6 @@ const hasContent = projects.length > 0 || notes.length > 0 || journal.length > 0
         ))}
         {notes.map((note) => (
           <NoteCard note={note} />
-        ))}
-        {journal.map((entry) => (
-          <JournalEntryCard entry={entry} />
         ))}
       </div>
     </section>

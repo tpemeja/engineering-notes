@@ -1,0 +1,100 @@
+---
+// Category buttons that show only the matching items on the page. Each item
+// carries `data-category` set to its category's slug. A filtered view is
+// linkable as #<slug>, which is how detail pages link back to their list.
+interface Props {
+  // Names the group for screen readers, e.g. "Filter projects by category".
+  label: string;
+  categories: { label: string; slug: string; count: number }[];
+  total: number;
+  // CSS selector for the items to filter.
+  items: string;
+}
+
+const { label, categories, total, items } = Astro.props;
+---
+
+<div class="category-filter" role="group" aria-label={label} data-items={items}>
+  <button type="button" aria-pressed="true" data-filter="">
+    All <span>{total}</span>
+  </button>
+  {
+    categories.map(({ label, slug, count }) => (
+      <button type="button" aria-pressed="false" data-filter={slug}>
+        {label} <span>{count}</span>
+      </button>
+    ))
+  }
+</div>
+
+<script>
+  for (const group of document.querySelectorAll<HTMLElement>('.category-filter')) {
+    const buttons = group.querySelectorAll<HTMLButtonElement>('button');
+    const items = document.querySelectorAll<HTMLElement>(group.dataset.items ?? '');
+
+    const show = (category: string) => {
+      for (const button of buttons) {
+        button.setAttribute('aria-pressed', String(button.dataset.filter === category));
+      }
+      for (const item of items) {
+        item.hidden = category !== '' && item.dataset.category !== category;
+      }
+    };
+
+    for (const button of buttons) {
+      button.addEventListener('click', () => {
+        const category = button.dataset.filter ?? '';
+        show(category);
+        history.replaceState(null, '', category ? `#${category}` : location.pathname);
+      });
+    }
+
+    const showHash = () => {
+      const category = decodeURIComponent(location.hash.slice(1));
+      if ([...buttons].some((button) => button.dataset.filter === category)) show(category);
+    };
+
+    showHash();
+    window.addEventListener('hashchange', showHash);
+  }
+</script>
+
+<style>
+  .category-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .category-filter button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    background-color: var(--color-bg-subtle);
+    color: var(--color-fg);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+
+  .category-filter button:hover {
+    border-color: var(--color-accent);
+  }
+
+  .category-filter button[aria-pressed='true'] {
+    border-color: var(--color-fg);
+    background-color: var(--color-fg);
+    color: var(--color-bg);
+  }
+
+  .category-filter span {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    opacity: 0.7;
+  }
+</style>

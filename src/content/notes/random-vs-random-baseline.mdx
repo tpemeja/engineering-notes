@@ -1,0 +1,42 @@
+---
+title: 'Test an evaluation harness on random vs random first'
+summary: "With no skill gap between the two sides, the harness should report a margin indistinguishable from zero. If it can't show no difference, it can't be trusted to show a real one."
+category: 'Reinforcement Learning'
+tags: ['Testing', 'Evaluation', 'OpenSpiel', 'Belote AI']
+lastUpdated: 2026-07-24
+status: evergreen
+relatedNotes: ['openspiel-ismcts-seeding-bug']
+---
+
+## Core concept
+
+Before writing any agent that tries to win, run two uniform-random players
+against each other over a batch of seeded deals. Neither side has any skill,
+so the points margin the harness reports should be statistically
+indistinguishable from zero. It's the cheapest check that the harness itself
+isn't lying.
+
+A measurement tool that hasn't been shown to report "no difference" when there
+genuinely is none can't be trusted to report a real difference later. So
+random vs random isn't a throwaway smoke test. It's the zero the whole harness
+is calibrated against, before any claim about an agent is allowed to rest on
+it.
+
+## What it caught in Belote AI
+
+I got `BeloteGame` and `BeloteState` far enough along in the OpenSpiel fork to
+deal cards, enforce bidding and play legal tricks to a scored end, then wrote
+the first match evaluator and ran random against random.
+
+Getting the paired-seed dealing right took a couple of passes: both sides have
+to see the same deals, so that the luck of the deck doesn't swamp the signal.
+An early version shared one RNG stream across both players' decisions, which
+subtly biased whoever acted first on tie-breaks.
+
+The finished harness reports a tie, -0.04 [-3.52, +3.45] over 1,199 deals, on
+the [Belote AI page](/projects/belote-ai/#simulation-harness).
+
+## Rule of thumb
+
+Before a harness compares two agents, make it compare two identical random
+ones, and don't trust it until it reports a tie.

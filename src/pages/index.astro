@@ -2,16 +2,12 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ProjectCard from '../components/content/ProjectCard.astro';
 import HomeSection from '../components/content/HomeSection.astro';
-import { getPublishedProjects, getPublishedJournalEntries, getPublishedNotes } from '../lib/collections';
+import { getPublishedProjects, getPublishedNotes } from '../lib/collections';
 import { formatDateShort } from '../lib/dates';
 import { profile, site } from '../data/site';
 import { experience } from '../data/experience';
 
-const [projects, journalEntries, notes] = await Promise.all([
-  getPublishedProjects(),
-  getPublishedJournalEntries(),
-  getPublishedNotes(),
-]);
+const [projects, notes] = await Promise.all([getPublishedProjects(), getPublishedNotes()]);
 
 const featuredProjects = profile.featuredProjects
   .map((slug) => projects.find((project) => project.id === slug))
@@ -24,22 +20,7 @@ const heroShots = featuredProjects
   .filter((cover) => cover !== undefined)
   .slice(0, 3);
 
-const writing = [
-  ...notes.map((note) => ({
-    kind: 'Note',
-    title: note.data.title,
-    date: note.data.lastUpdated,
-    href: `/notes/${note.id}/`,
-  })),
-  ...journalEntries.map((entry) => ({
-    kind: 'Journal',
-    title: entry.data.title,
-    date: entry.data.date,
-    href: `/journal/${entry.id}/`,
-  })),
-]
-  .sort((a, b) => b.date.valueOf() - a.date.valueOf())
-  .slice(0, 4);
+const latestNotes = notes.slice(0, 4);
 
 const isExternal = (href: string) => /^https?:\/\//.test(href);
 ---
@@ -135,17 +116,17 @@ const isExternal = (href: string) => /^https?:\/\//.test(href);
       </HomeSection>
 
       {
-        writing.length > 0 && (
-          <HomeSection title="Writing" href="/notes/" linkLabel="All notes">
+        latestNotes.length > 0 && (
+          <HomeSection title="Latest notes" href="/notes/" linkLabel={`All ${notes.length} notes`}>
             <ul class="writing">
-              {writing.map(({ kind, title, date, href }) => (
+              {latestNotes.map((note) => (
                 <li>
-                  <a href={href}>
+                  <a href={`/notes/${note.id}/`}>
                     <span class="writing-meta">
-                      <span class="writing-kind">{kind}</span>
-                      <time datetime={date.toISOString()}>{formatDateShort(date)}</time>
+                      <span class="writing-kind">{note.data.category}</span>
+                      <time datetime={note.data.lastUpdated.toISOString()}>{formatDateShort(note.data.lastUpdated)}</time>
                     </span>
-                    <span class="writing-title">{title}</span>
+                    <span class="writing-title">{note.data.title}</span>
                   </a>
                 </li>
               ))}

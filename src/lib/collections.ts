@@ -11,28 +11,6 @@ export async function getPublishedProjects(): Promise<CollectionEntry<'projects'
   });
 }
 
-export async function getPublishedJournalEntries(): Promise<CollectionEntry<'journal'>[]> {
-  const entries = await getCollection('journal', ({ data }) => !isProd || !data.draft);
-  return entries.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
-}
-
-export async function getJournalEntriesForProject(
-  projectSlug: string
-): Promise<CollectionEntry<'journal'>[]> {
-  const entries = await getPublishedJournalEntries();
-  return entries.filter((entry) => entry.data.relatedProjectSlug?.id === projectSlug);
-}
-
-export async function getJournalEntriesForPhase(
-  projectSlug: string,
-  phaseId: string
-): Promise<CollectionEntry<'journal'>[]> {
-  const entries = await getPublishedJournalEntries();
-  return entries
-    .filter((entry) => entry.data.relatedProjectSlug?.id === projectSlug && entry.data.projectPhaseId === phaseId)
-    .sort((a, b) => a.data.date.valueOf() - b.data.date.valueOf());
-}
-
 export async function getPublishedNotes(): Promise<CollectionEntry<'notes'>[]> {
   const entries = await getCollection('notes', ({ data }) => !isProd || data.status !== 'draft');
   return entries.sort((a, b) => b.data.lastUpdated.valueOf() - a.data.lastUpdated.valueOf());
@@ -40,18 +18,14 @@ export async function getPublishedNotes(): Promise<CollectionEntry<'notes'>[]> {
 
 export interface ActivityEntry {
   date: Date;
-  kind: 'started' | 'shipped' | 'merged' | 'wrote' | 'noted';
+  kind: 'started' | 'shipped' | 'merged' | 'noted';
   text: string;
   detail?: string;
   href: string;
 }
 
 export async function getRecentActivity(limit: number): Promise<ActivityEntry[]> {
-  const [projects, journal, notes] = await Promise.all([
-    getPublishedProjects(),
-    getPublishedJournalEntries(),
-    getPublishedNotes(),
-  ]);
+  const [projects, notes] = await Promise.all([getPublishedProjects(), getPublishedNotes()]);
 
   const entries: ActivityEntry[] = [
     ...projects.map((entry) => ({
@@ -60,12 +34,6 @@ export async function getRecentActivity(limit: number): Promise<ActivityEntry[]>
       text: entry.data.title,
       detail: entry.data.tagline,
       href: `/projects/${entry.id}/`,
-    })),
-    ...journal.map((entry) => ({
-      date: entry.data.date,
-      kind: 'wrote' as const,
-      text: entry.data.title,
-      href: `/journal/${entry.id}/`,
     })),
     ...notes.map((entry) => ({
       date: entry.data.lastUpdated,

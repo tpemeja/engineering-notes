@@ -13,6 +13,13 @@ import { remarkHeadingId } from './src/lib/remark-heading-id.mjs';
 export default defineConfig({
   site: 'https://engineering.kaseovo.com',
 
+  // The journal was folded into the notes; keep its old links working.
+  redirects: {
+    '/journal': '/notes/',
+    '/journal/2026-w30-belote-random-baseline': '/notes/random-vs-random-baseline/',
+    '/journal/2026-w32-belote-ismcts-seed-bug': '/notes/openspiel-ismcts-seeding-bug/',
+  },
+
   markdown: {
     processor: unified({
       remarkPlugins: [remarkHeadingId],

@@ -7,7 +7,6 @@ import TagList from '../components/content/TagList.astro';
 import RelatedContent from '../components/content/RelatedContent.astro';
 import ProjectHighlights from '../components/content/ProjectHighlights.astro';
 import { getEntries } from 'astro:content';
-import { getJournalEntriesForProject } from '../lib/collections';
 import { slugifyTag } from '../lib/tags';
 
 interface Props {
@@ -22,7 +21,6 @@ const started = startDate.toLocaleDateString('en-US', { year: 'numeric', month: 
 const relatedNotes = project.data.relatedNotesSlugs.length
   ? await getEntries(project.data.relatedNotesSlugs)
   : [];
-const relatedJournal = await getJournalEntriesForProject(project.id);
 ---
 
 <BaseLayout title={title} description={description} ogImagePath={`/open-graph/projects/${project.id}.png`} type="article">
@@ -64,7 +62,7 @@ const relatedJournal = await getJournalEntriesForProject(project.id);
       <slot />
     </Prose>
 
-    <RelatedContent title="Related" notes={relatedNotes} journal={relatedJournal} />
+    <RelatedContent title="Related" notes={relatedNotes} />
   </article>
 </BaseLayout>
 

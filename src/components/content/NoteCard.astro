@@ -8,7 +8,7 @@ interface Props {
 }
 
 const { note } = Astro.props;
-const { title, category, lastUpdated, status } = note.data;
+const { title, summary, category, lastUpdated, status } = note.data;
 ---
 
 <article class="note-card">
@@ -18,6 +18,7 @@ const { title, category, lastUpdated, status } = note.data;
       <StatusBadge status={status} />
     </div>
     <h3>{title}</h3>
+    <p class="note-card-summary">{summary}</p>
     <p class="note-card-updated">Updated {formatDateShort(lastUpdated)}</p>
   </a>
 </article>
@@ -59,6 +60,18 @@ const { title, category, lastUpdated, status } = note.data;
     margin: 0;
     font-size: 1rem;
     font-weight: 600;
+  }
+
+  .note-card-summary {
+    margin: 0;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    overflow: hidden;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--color-fg-muted);
   }
 
   .note-card-updated {

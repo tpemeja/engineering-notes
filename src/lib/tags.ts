@@ -1,4 +1,4 @@
-import { getPublishedJournalEntries, getPublishedNotes, getPublishedProjects } from './collections';
+import { getPublishedNotes, getPublishedProjects } from './collections';
 import { readingList } from '../data/reading-list';
 
 export interface TaggedEntry {
@@ -6,7 +6,7 @@ export interface TaggedEntry {
   description: string;
   href: string;
   date: Date;
-  kind: 'project' | 'journal' | 'note' | 'book';
+  kind: 'project' | 'note' | 'book';
 }
 
 export function slugifyTag(tag: string): string {
@@ -23,11 +23,7 @@ interface TagBucket {
 }
 
 async function buildTagBuckets(): Promise<Map<string, TagBucket>> {
-  const [projects, journal, notes] = await Promise.all([
-    getPublishedProjects(),
-    getPublishedJournalEntries(),
-    getPublishedNotes(),
-  ]);
+  const [projects, notes] = await Promise.all([getPublishedProjects(), getPublishedNotes()]);
 
   const buckets = new Map<string, TagBucket>();
 
@@ -50,21 +46,10 @@ async function buildTagBuckets(): Promise<Map<string, TagBucket>> {
     for (const tech of entry.data.technologies) add(tech, tagged);
   }
 
-  for (const entry of journal) {
-    const tagged: TaggedEntry = {
-      title: entry.data.title,
-      description: entry.data.summary,
-      href: `/journal/${entry.id}/`,
-      date: entry.data.date,
-      kind: 'journal',
-    };
-    for (const tag of entry.data.tags) add(tag, tagged);
-  }
-
   for (const entry of notes) {
     const tagged: TaggedEntry = {
       title: entry.data.title,
-      description: entry.data.category,
+      description: entry.data.summary,
       href: `/notes/${entry.id}/`,
       date: entry.data.lastUpdated,
       kind: 'note',

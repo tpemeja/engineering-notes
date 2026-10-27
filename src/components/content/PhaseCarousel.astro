@@ -142,8 +142,7 @@ const phasesMeta = phases.map(({ id, status }) => ({ id, status }));
     }
 
     // Group the slotted content into one slide per `### Heading` — everything
-    // between one h3 and the next belongs to that phase (journal box, prose,
-    // callouts). Content before the first h3 (there shouldn't be any) is
+    // between one h3 and the next belongs to that phase (prose, callouts). Content before the first h3 (there shouldn't be any) is
     // dropped rather than silently left always-visible.
     const children = Array.from(slidesContainer.children);
     const slides: HTMLElement[] = [];

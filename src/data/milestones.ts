@@ -1,6 +1,6 @@
-// Moments worth a line on the Now page that no project, journal entry or note
-// records by its own date. Started projects, journal entries and notes are
-// picked up from their collections; add here only what happened to them later.
+// Moments worth a line on the Now page that no project or note records by its
+// own date. Started projects and notes are picked up from their collections;
+// add here only what happened to them later.
 export interface Milestone {
   date: string;
   kind: 'shipped' | 'merged';

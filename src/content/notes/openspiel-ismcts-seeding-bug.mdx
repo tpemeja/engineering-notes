@@ -1,0 +1,39 @@
+---
+title: "OpenSpiel's Python ISMCTSBot ignored its seed"
+summary: "Two runs of the same seeded ISMCTSBot match made different decisions, because the default resampler never got the bot's random_state. Fixed upstream in open_spiel#1584."
+category: 'OpenSpiel'
+tags: ['OpenSpiel', 'ISMCTS', 'Reproducibility', 'Open Source', 'Belote AI']
+lastUpdated: 2026-08-03
+status: evergreen
+relatedNotes: ['random-vs-random-baseline']
+---
+
+## Core concept
+
+Getting OpenSpiel's `ISMCTSBot` to play Belote meant writing
+`resample_from_infostate` on `BeloteState`, and then checking that I could
+trust what came out of it. The simplest check is to run the same seeded match
+twice and expect identical decisions.
+
+They weren't identical. In `ismcts.py`, the default resampler builds its own
+`UniformProbabilitySampler` without passing it the `random_state` the bot was
+seeded with, so it quietly falls back to wall-clock time whatever seed you
+give the bot. The C++ `ISMCTSBot` seeds correctly. Only the Python constructor
+call was wrong, which is the kind of gap that's easy to miss if you only test
+one language binding.
+
+## The fix
+
+I fixed it upstream in
+[open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584),
+with a regression test for seeded determinism. It was merged on August 25,
+2026, my first merged open-source PR.
+
+## Rule of thumb
+
+A "seeded" bot needs to be checked end to end, not assumed reproducible
+because its API accepts a `seed`. Run the same seeded match twice and compare
+the decisions. It's the same lesson as plain `MCTSBot` searching with every
+hand visible: OpenSpiel's agent library is broad and well built, but nothing
+about using it correctly for an imperfect-information game like Belote is
+automatic, and that includes reproducibility.

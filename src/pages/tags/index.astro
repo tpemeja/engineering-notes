@@ -10,11 +10,11 @@ const groups = TAG_CATEGORY_ORDER.map((category) => ({
 })).filter((group) => group.tags.length > 0);
 ---
 
-<BaseLayout title="Tags" description="Browse all projects, journal entries, and notes by tag.">
+<BaseLayout title="Tags" description="Browse all projects and notes by tag.">
   <div class="page-container">
     <header class="page-header">
       <h1>Tags</h1>
-      <p>Every tag used across projects, journal entries, and notes.</p>
+      <p>Every tag used across projects and notes.</p>
     </header>
     {
       groups.map((group) => (

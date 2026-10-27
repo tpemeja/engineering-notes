@@ -76,24 +76,12 @@ const projects = defineCollection({
   }),
 });
 
-const journal = defineCollection({
-  loader: glob({ pattern: '**/*.mdx', base: './src/content/journal' }),
-  schema: z.object({
-    title: z.string(),
-    date: z.coerce.date(),
-    period: z.string(),
-    tags: z.array(z.string()).default([]),
-    summary: z.string(),
-    relatedProjectSlug: reference('projects').optional(),
-    projectPhaseId: z.string().optional(),
-    draft: z.boolean().default(false),
-  }),
-});
-
 const notes = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/notes' }),
   schema: z.object({
     title: z.string(),
+    // One or two sentences: the note's list entry and its page description.
+    summary: z.string(),
     category: z.enum(NOTE_CATEGORIES),
     tags: z.array(z.string()).default([]),
     lastUpdated: z.coerce.date(),
@@ -112,4 +100,4 @@ const pages = defineCollection({
   }),
 });
 
-export const collections = { projects, journal, notes, pages };
+export const collections = { projects, notes, pages };

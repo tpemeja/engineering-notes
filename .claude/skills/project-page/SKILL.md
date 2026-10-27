@@ -68,7 +68,7 @@ Approach prose, then the one hero visual.
 </Phase>
 ```
 
-`status` is `planned`, `in-progress`, or `done`. `id` is the deep-link anchor, so it is stable once published: journal entries reference it through `projectPhaseId`.
+`status` is `planned`, `in-progress`, or `done`. `id` is the deep-link anchor, so it is stable once published: notes and other pages link to `/projects/<slug>/#<id>`.
 
 Collapsed rows **are** the ledger, so `outcome` does double duty: the row's headline and the phase's result. State it once, in the prop, and let the body carry only goal and approach.
 
@@ -115,7 +115,7 @@ Alongside the visuals, at most one `<Callout>` per phase.
 ### Where cut material goes
 
 - **Experiment logs, extra charts, parameter sweeps** go to the project's own repo. Name the path in prose the way `instagram-insight` points at its `SETUP.md`.
-- **Transferable lessons** get promoted to `src/content/notes/` and wired through `relatedNotesSlugs`. A lesson that would teach someone who never touches this project belongs there rather than deleted.
+- **Transferable lessons** get promoted to `src/content/notes/` and wired through `relatedNotesSlugs`. A lesson that would teach someone who never touches this project belongs there rather than deleted. The note's page links back to every project that lists it, so the link is set once, on the project.
 
 ## Prose rules
 
@@ -129,9 +129,9 @@ Fenced blocks are syntax-highlighted by Shiki, dual-themed in `astro.config.mjs`
 
 Write only code you can verify against a real source. When the project's repo is not on this machine, keep the snippet to library code you can confirm and describe the project's own API in prose, rather than inventing a signature that looks authoritative and is wrong.
 
-## Journal entries
+## Notes
 
-Journal entries surface at page level through `relatedProjectSlug`, rendered by `RelatedContent`. Keep them out of phase bodies: they are reflections about the project, not evidence for one phase's result.
+Notes surface at page level through `relatedNotesSlugs`, rendered by `RelatedContent`. Keep them out of phase bodies: a note is a lesson that stands on its own, not evidence for one phase's result. Each note carries a `summary`, one or two sentences shown on `/notes/` and used as its page description.
 
 ## Before calling it done
 

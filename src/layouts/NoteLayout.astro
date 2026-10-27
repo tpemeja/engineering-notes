@@ -7,6 +7,7 @@ import TagList from '../components/content/TagList.astro';
 import RelatedContent from '../components/content/RelatedContent.astro';
 import { formatDate } from '../lib/dates';
 import { getEntries } from 'astro:content';
+import { getPublishedProjects } from '../lib/collections';
 import { slugifyTag } from '../lib/tags';
 
 interface Props {
@@ -14,13 +15,17 @@ interface Props {
 }
 
 const { note } = Astro.props;
-const { title, category, tags, lastUpdated, status } = note.data;
+const { title, summary, category, tags, lastUpdated, status } = note.data;
 const categoryAnchor = `/notes/#${slugifyTag(category)}`;
 
 const relatedNotes = note.data.relatedNotes.length ? await getEntries(note.data.relatedNotes) : [];
+// A project lists its notes in relatedNotesSlugs; the note links back from that.
+const relatedProjects = (await getPublishedProjects()).filter((project) =>
+  project.data.relatedNotesSlugs.some((ref) => ref.id === note.id)
+);
 ---
 
-<BaseLayout title={title} description={`${category} — ${title}`} ogImagePath={`/open-graph/notes/${note.id}.png`} type="article">
+<BaseLayout title={title} description={summary} ogImagePath={`/open-graph/notes/${note.id}.png`} type="article">
   <article class="page-container">
     <header class="note-header">
       <p class="note-meta">
@@ -38,7 +43,7 @@ const relatedNotes = note.data.relatedNotes.length ? await getEntries(note.data.
       <slot />
     </Prose>
 
-    <RelatedContent title="Related notes" notes={relatedNotes} />
+    <RelatedContent title="Related" projects={relatedProjects} notes={relatedNotes} />
   </article>
 </BaseLayout>
 

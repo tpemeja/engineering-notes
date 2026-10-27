@@ -1,8 +1,8 @@
 # Engineering Notebook
 
-A public "build in public" engineering notebook — projects, a weekly
-journal, and evergreen technical notes — built with Astro, TypeScript,
-Tailwind CSS, and MDX content collections.
+A public "build in public" engineering notebook: projects and evergreen
+technical notes, built with Astro, TypeScript, Tailwind CSS, and MDX content
+collections.
 
 ## Project structure
 
@@ -11,7 +11,6 @@ src/
 ├── content.config.ts     # Zod schemas for all content collections
 ├── content/
 │   ├── projects/          # One .mdx per project
-│   ├── journal/            # One .mdx per weekly entry
 │   ├── notes/               # One .mdx per evergreen note
 │   └── pages/                # about / resume / now (MDX prose pages)
 ├── data/                    # site.ts (identity/nav config), reading-list.ts
@@ -20,12 +19,12 @@ src/
 │   ├── ui/                     # theme toggle, tag/status badges, search
 │   ├── content/                 # cards, callout, related content, timeline
 │   └── seo/                      # SEOHead
-├── layouts/                  # Base / Page / Project / Journal / Note layouts
+├── layouts/                  # Base / Page / Project / Note layouts
 ├── lib/                       # dates, tags, collections, GitHub activity
 └── pages/                     # file-based routes
 ```
 
-Every project/journal/note is a single `.mdx` file — duplicate the
+Every project/note is a single `.mdx` file; duplicate the
 `example-*` file in each collection to add a real entry, and delete the
 `example-*` file once you have real content in that collection.
 

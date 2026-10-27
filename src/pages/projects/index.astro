@@ -1,6 +1,7 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
 import ProjectTile from '../../components/content/ProjectTile.astro';
+import CategoryFilter from '../../components/ui/CategoryFilter.astro';
 import { getPublishedProjects } from '../../lib/collections';
 import { slugifyTag } from '../../lib/tags';
 import { PROJECT_CATEGORIES } from '../../content.config';
@@ -19,7 +20,7 @@ const projects = [
 ];
 
 const categories = PROJECT_CATEGORIES.map((category) => ({
-  category,
+  label: category,
   slug: slugifyTag(category),
   count: projects.filter((project) => project.data.category === category).length,
 })).filter(({ count }) => count > 0);
@@ -38,18 +39,12 @@ const categories = PROJECT_CATEGORIES.map((category) => ({
         what shipped and what I measured, written as the work happens rather
         than after the fact.
       </p>
-      <div class="category-filters" role="group" aria-label="Filter by category">
-        <button type="button" aria-pressed="true" data-filter="">
-          All <span>{projects.length}</span>
-        </button>
-        {
-          categories.map(({ category, slug, count }) => (
-            <button type="button" aria-pressed="false" data-filter={slug}>
-              {category} <span>{count}</span>
-            </button>
-          ))
-        }
-      </div>
+      <CategoryFilter
+        label="Filter projects by category"
+        categories={categories}
+        total={projects.length}
+        items=".project-tile"
+      />
     </header>
 
     <div class="project-grid">
@@ -57,38 +52,6 @@ const categories = PROJECT_CATEGORIES.map((category) => ({
     </div>
   </div>
 </BaseLayout>
-
-<script>
-  const buttons = document.querySelectorAll<HTMLButtonElement>('.category-filters button');
-  const tiles = document.querySelectorAll<HTMLElement>('.project-tile');
-
-  function show(category: string) {
-    for (const button of buttons) {
-      button.setAttribute('aria-pressed', String(button.dataset.filter === category));
-    }
-    for (const tile of tiles) {
-      tile.hidden = category !== '' && tile.dataset.category !== category;
-    }
-  }
-
-  for (const button of buttons) {
-    button.addEventListener('click', () => {
-      const category = button.dataset.filter ?? '';
-      show(category);
-      // Keeps a filtered view linkable, the same way project pages link here.
-      history.replaceState(null, '', category ? `#${category}` : location.pathname);
-    });
-  }
-
-  // A project page's breadcrumb links here as /projects/#<category>.
-  function showHash() {
-    const category = decodeURIComponent(location.hash.slice(1));
-    if ([...buttons].some((button) => button.dataset.filter === category)) show(category);
-  }
-
-  showHash();
-  window.addEventListener('hashchange', showHash);
-</script>
 
 <style>
   .page-container {
@@ -115,44 +78,6 @@ const categories = PROJECT_CATEGORIES.map((category) => ({
     color: var(--color-fg-muted);
     font-size: 1.0625rem;
     line-height: 1.6;
-  }
-
-  .category-filters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-  }
-
-  .category-filters button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 0.9rem;
-    border: 1px solid var(--color-border);
-    border-radius: 9999px;
-    background-color: var(--color-bg-subtle);
-    color: var(--color-fg);
-    font: inherit;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: border-color 0.15s ease;
-  }
-
-  .category-filters button:hover {
-    border-color: var(--color-accent);
-  }
-
-  .category-filters button[aria-pressed='true'] {
-    border-color: var(--color-fg);
-    background-color: var(--color-fg);
-    color: var(--color-bg);
-  }
-
-  .category-filters span {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    opacity: 0.7;
   }
 
   .project-grid {
