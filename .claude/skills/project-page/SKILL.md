@@ -20,9 +20,11 @@ The page is **looked at** before it is read. Prefer anything with shape over a p
 5. **Tech stack**: `<TechStack notes={frontmatter.technologyNotes} />`.
 6. **Future improvements**: known gaps, not a roadmap.
 
-Frontmatter carries `title`, `description`, `tagline` (one line of at most 80 characters saying what it is, shown on the Now page's activity log), `category`, optional `active`, `startDate`, `technologies`, `technologyNotes`, `githubUrl`, `highlights`, `relatedNotesSlugs`, `order`. It carries no phase data and no `progress`.
+Frontmatter carries `title`, `description`, `tagline` (one line of at most 80 characters saying what it is, shown on project cards and the Now page's activity log), `category`, optional `active`, `startDate`, `technologies`, `technologyNotes`, `githubUrl`, `highlights`, `cover`, `relatedNotesSlugs`, `order`. It carries no phase data and no `progress`.
 
-`category` is one of `PROJECT_CATEGORIES` in `src/content.config.ts`, and it sets the group the project is listed under on `/projects/`. The order of that array is the order of the groups; `order` sorts projects within a group. Add a new category only when a project fits none of the existing ones.
+`cover` is `{ src, alt }`: a 1600x1000 image at `public/images/projects/<slug>/cover.webp`, shown on the project's tile on `/projects/` and, if the slug is in `profile.featuredProjects` in `src/data/site.ts`, on the home page. Make it the project's best screenshot framed in a browser window or device on a tinted background, or for a project with no UI, a diagram or code-and-output picture of what it does. Cards and tiles show the first two `highlights` headlines, so those two should make sense without their `detail`.
+
+`category` is one of `PROJECT_CATEGORIES` in `src/content.config.ts`, and it sets the filter the project appears under on `/projects/`; the filters follow that array's order. The grid itself lists the featured projects first, in `profile.featuredProjects` order, then the rest by `order`. Add a new category only when a project fits none of the existing ones.
 
 `active: true` means you are working on it now, and it is the only project state the site shows. Leave it out otherwise: there is no paused or completed, because telling them apart means predicting whether you will come back.
 

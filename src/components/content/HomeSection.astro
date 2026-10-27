@@ -4,12 +4,13 @@ interface Props {
   href: string;
   linkLabel: string;
   external?: boolean;
+  id?: string;
 }
 
-const { title, href, linkLabel, external = false } = Astro.props;
+const { title, href, linkLabel, external = false, id } = Astro.props;
 ---
 
-<section class="home-section">
+<section class="home-section" id={id}>
   <div class="section-header">
     <h2>{title}</h2>
     {
@@ -26,6 +27,10 @@ const { title, href, linkLabel, external = false } = Astro.props;
 </section>
 
 <style>
+  .home-section {
+    scroll-margin-top: 5rem;
+  }
+
   .section-header {
     display: flex;
     align-items: baseline;

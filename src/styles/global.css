@@ -67,6 +67,39 @@
   }
 }
 
+@layer components {
+  .button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.6rem 1.1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 0.5rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--color-fg);
+    text-decoration: none;
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease;
+  }
+
+  .button:hover {
+    border-color: var(--color-accent);
+  }
+
+  .button-primary {
+    border-color: var(--color-accent);
+    background-color: var(--color-accent);
+    color: var(--color-accent-fg);
+  }
+
+  .button-primary:hover {
+    background-color: color-mix(in oklab, var(--color-accent) 85%, var(--color-fg));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

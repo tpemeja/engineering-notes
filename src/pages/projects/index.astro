@@ -1,16 +1,28 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
-import ProjectCard from '../../components/content/ProjectCard.astro';
+import ProjectTile from '../../components/content/ProjectTile.astro';
 import { getPublishedProjects } from '../../lib/collections';
 import { slugifyTag } from '../../lib/tags';
 import { PROJECT_CATEGORIES } from '../../content.config';
+import { profile } from '../../data/site';
 
-const projects = await getPublishedProjects();
+const published = await getPublishedProjects();
 
-const groups = PROJECT_CATEGORIES.map((category) => ({
+// The home page's featured projects lead, in the same order; the rest follow
+// by `order`.
+const featuredSlugs: readonly string[] = profile.featuredProjects;
+const projects = [
+  ...featuredSlugs
+    .map((slug) => published.find((project) => project.id === slug))
+    .filter((project) => project !== undefined),
+  ...published.filter((project) => !featuredSlugs.includes(project.id)),
+];
+
+const categories = PROJECT_CATEGORIES.map((category) => ({
   category,
-  projects: projects.filter((project) => project.data.category === category),
-})).filter((group) => group.projects.length > 0);
+  slug: slugifyTag(category),
+  count: projects.filter((project) => project.data.category === category).length,
+})).filter(({ count }) => count > 0);
 ---
 
 <BaseLayout
@@ -21,63 +33,131 @@ const groups = PROJECT_CATEGORIES.map((category) => ({
     <header class="page-header">
       <h1>Projects</h1>
       <p>
-        Each project page covers the problem, the solution, the
-        architecture, and what I'd do differently — updated as the work
-        progresses, not written after the fact.
+        Things I've built outside work, from serverless backends to voice AI
+        and game-playing agents. Each page covers the problem, the approach,
+        what shipped and what I measured, written as the work happens rather
+        than after the fact.
       </p>
+      <div class="category-filters" role="group" aria-label="Filter by category">
+        <button type="button" aria-pressed="true" data-filter="">
+          All <span>{projects.length}</span>
+        </button>
+        {
+          categories.map(({ category, slug, count }) => (
+            <button type="button" aria-pressed="false" data-filter={slug}>
+              {category} <span>{count}</span>
+            </button>
+          ))
+        }
+      </div>
     </header>
 
-    {
-      groups.map(({ category, projects }) => (
-        <section class="category-section" id={slugifyTag(category)}>
-          <h2>{category}</h2>
-          <div class="project-grid">
-            {projects.map((project) => <ProjectCard project={project} />)}
-          </div>
-        </section>
-      ))
-    }
+    <div class="project-grid">
+      {projects.map((project) => <ProjectTile project={project} />)}
+    </div>
   </div>
 </BaseLayout>
 
+<script>
+  const buttons = document.querySelectorAll<HTMLButtonElement>('.category-filters button');
+  const tiles = document.querySelectorAll<HTMLElement>('.project-tile');
+
+  function show(category: string) {
+    for (const button of buttons) {
+      button.setAttribute('aria-pressed', String(button.dataset.filter === category));
+    }
+    for (const tile of tiles) {
+      tile.hidden = category !== '' && tile.dataset.category !== category;
+    }
+  }
+
+  for (const button of buttons) {
+    button.addEventListener('click', () => {
+      const category = button.dataset.filter ?? '';
+      show(category);
+      // Keeps a filtered view linkable, the same way project pages link here.
+      history.replaceState(null, '', category ? `#${category}` : location.pathname);
+    });
+  }
+
+  // A project page's breadcrumb links here as /projects/#<category>.
+  function showHash() {
+    const category = decodeURIComponent(location.hash.slice(1));
+    if ([...buttons].some((button) => button.dataset.filter === category)) show(category);
+  }
+
+  showHash();
+  window.addEventListener('hashchange', showHash);
+</script>
+
 <style>
   .page-container {
-    max-width: 64rem;
+    max-width: 72rem;
     margin-inline: auto;
     padding: 2.5rem 1.5rem 4rem;
   }
 
   .page-header {
     margin-bottom: 2rem;
-    max-width: 40rem;
   }
 
   .page-header h1 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1.75rem;
+    margin: 0 0 0.75rem;
+    font-size: clamp(2.5rem, 5vw, 3.5rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
   }
 
   .page-header p {
-    margin: 0;
+    max-width: 40rem;
+    margin: 0 0 1.5rem;
     color: var(--color-fg-muted);
+    font-size: 1.0625rem;
+    line-height: 1.6;
   }
 
-  .category-section {
-    margin-bottom: 2.5rem;
-    scroll-margin-top: 5rem;
+  .category-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
   }
 
-  .category-section h2 {
-    font-size: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.03em;
-    color: var(--color-fg-muted);
-    margin: 0 0 1rem 0;
+  .category-filters button {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.9rem;
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    background-color: var(--color-bg-subtle);
+    color: var(--color-fg);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s ease;
+  }
+
+  .category-filters button:hover {
+    border-color: var(--color-accent);
+  }
+
+  .category-filters button[aria-pressed='true'] {
+    border-color: var(--color-fg);
+    background-color: var(--color-fg);
+    color: var(--color-bg);
+  }
+
+  .category-filters span {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    opacity: 0.7;
   }
 
   .project-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 24rem));
-    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fill, minmax(min(20rem, 100%), 1fr));
+    gap: 1rem;
   }
 </style>

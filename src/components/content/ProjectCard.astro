@@ -1,81 +1,271 @@
 ---
 import type { CollectionEntry } from 'astro:content';
-import StatusBadge from '../ui/StatusBadge.astro';
-import TagList from './TagList.astro';
 
 interface Props {
   project: CollectionEntry<'projects'>;
+  // Heading level, so the card fits under whichever section lists it.
+  headingLevel?: 'h2' | 'h3';
 }
 
-const { project } = Astro.props;
-const { title, description, active, technologies, websiteUrl } = project.data;
+const { project, headingLevel = 'h3' } = Astro.props;
+const { title, tagline, description, category, active, cover, highlights, technologies, websiteUrl } =
+  project.data;
+
+const Heading = headingLevel;
+const MAX_TECH = 4;
+const shownTech = technologies.slice(0, MAX_TECH);
+const hiddenTech = technologies.length - shownTech.length;
+// The first two highlights are the card's proof: results, not features.
+const results = highlights.slice(0, 2);
 ---
 
 <article class="project-card">
-  <a href={`/projects/${project.id}/`} class="project-card-link">
-    <div class="project-card-header">
-      <h3>{title}</h3>
-      {active && <StatusBadge status="active" />}
+  <div class="project-card-cover">
+    {
+      cover ? (
+        <img src={cover.src} alt={cover.alt} width="1600" height="1000" loading="lazy" decoding="async" />
+      ) : (
+        <span class="project-card-placeholder" aria-hidden="true">{title}</span>
+      )
+    }
+  </div>
+
+  <div class="project-card-body">
+    <p class="project-card-kicker">{category}</p>
+    <div class="project-card-heading">
+      <Heading class="project-card-title">
+        <a href={`/projects/${project.id}/`}>{title}</a>
+      </Heading>
+      {active && <span class="project-card-active">Active</span>}
     </div>
-    <p class="project-card-description">{description}</p>
-  </a>
-  {
-    websiteUrl && (
-      <a href={websiteUrl} class="project-card-website" rel="noopener noreferrer" target="_blank">
-        {new URL(websiteUrl).hostname} &#8599;
-      </a>
-    )
-  }
-  <TagList tags={technologies} />
+    <p class="project-card-tagline">{tagline ?? description}</p>
+
+    {
+      results.length > 0 && (
+        <ul class="project-card-results">
+          {results.map(({ headline }) => (
+            <li>{headline}</li>
+          ))}
+        </ul>
+      )
+    }
+
+    <div class="project-card-footer">
+      <ul class="project-card-tech" aria-label="Technologies">
+        {shownTech.map((tech) => <li>{tech}</li>)}
+        {hiddenTech > 0 && <li class="project-card-more">+{hiddenTech}</li>}
+      </ul>
+      {
+        websiteUrl && (
+          <a href={websiteUrl} class="project-card-live" rel="noopener noreferrer" target="_blank">
+            Live &#8599;
+          </a>
+        )
+      }
+    </div>
+  </div>
 </article>
 
 <style>
   .project-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
     border: 1px solid var(--color-border);
-    border-radius: 0.5rem;
-    padding: 1.1rem 1.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
+    border-radius: 0.75rem;
+    overflow: hidden;
     background-color: var(--color-bg);
-    transition: border-color 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
   }
 
-  .project-card:hover {
+  .project-card:hover,
+  .project-card:focus-within {
     border-color: var(--color-accent);
+    box-shadow: 0 12px 32px -16px color-mix(in oklab, var(--color-fg) 35%, transparent);
+    transform: translateY(-2px);
   }
 
-  .project-card-link {
-    text-decoration: none;
-    color: inherit;
+  .project-card-cover {
+    aspect-ratio: 16 / 10;
+    overflow: hidden;
+    border-bottom: 1px solid var(--color-border);
+    background-color: var(--color-bg-subtle);
+  }
+
+  .project-card-cover img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.4s ease;
+  }
+
+  .project-card:hover .project-card-cover img {
+    transform: scale(1.03);
+  }
+
+  .project-card-placeholder {
+    height: 100%;
+    display: grid;
+    place-items: center;
+    font-family: var(--font-mono);
+    font-size: 1.25rem;
+    color: var(--color-fg-muted);
+  }
+
+  .project-card-body {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 0.55rem;
+    padding: 1rem 1.15rem 1.1rem;
   }
 
-  .project-card-header {
+  .project-card-kicker {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-fg-muted);
+  }
+
+  .project-card-heading {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
     gap: 0.75rem;
   }
 
-  .project-card-header h3 {
-    margin: 0;
-    font-size: 1.0625rem;
-    font-weight: 600;
+  .project-card-active {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-status-active);
   }
 
-  .project-card-description {
+  .project-card-active::before {
+    content: '';
+    width: 0.45rem;
+    height: 0.45rem;
+    border-radius: 9999px;
+    background-color: currentColor;
+  }
+
+  .project-card-title {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 650;
+    line-height: 1.3;
+  }
+
+  .project-card-title a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* The title link covers the whole card; the Live link sits above it. */
+  .project-card-title a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  .project-card-title a:focus-visible {
+    outline: none;
+  }
+
+  .project-card:has(.project-card-title a:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  .project-card-tagline {
     margin: 0;
     color: var(--color-fg-muted);
     font-size: 0.9375rem;
     line-height: 1.5;
   }
 
-  .project-card-website {
-    align-self: flex-start;
+  .project-card-results {
+    list-style: none;
+    margin: 0.15rem 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+  }
+
+  .project-card-results li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
     font-size: 0.875rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .project-card-results li::before {
+    content: '';
+    flex: none;
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 0.1rem;
+    background-color: var(--color-accent);
+    transform: translateY(-0.1rem);
+  }
+
+  .project-card-footer {
+    margin-top: auto;
+    padding-top: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+
+  .project-card-tech {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .project-card-tech li {
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    line-height: 1.2;
+    color: var(--color-fg-muted);
+  }
+
+  .project-card-tech .project-card-more {
+    border-style: dashed;
+  }
+
+  .project-card-live {
+    position: relative;
+    z-index: 1;
+    flex: none;
+    font-size: 0.8125rem;
+    font-weight: 600;
     color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  .project-card-live:hover {
+    text-decoration: underline;
   }
 </style>

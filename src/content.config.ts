@@ -25,49 +25,55 @@ export const PHASE_STATUSES = ['planned', 'in-progress', 'done'] as const;
 
 const projects = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/projects' }),
-  schema: ({ image }) =>
-    z.object({
-      title: z.string(),
-      description: z.string(),
-      tagline: z.string().max(80).optional(),
-      category: z.enum(PROJECT_CATEGORIES),
-      active: z.boolean().default(false),
-      startDate: z.coerce.date(),
-      technologies: z.array(z.string()).default([]),
-      technologyNotes: z
-        .array(
-          z.object({
-            name: z.string(),
-            context: z.string(),
-          })
-        )
-        .default([]),
-      githubUrl: z.url().optional(),
-      websiteUrl: z.url().optional(),
-      highlights: z
-        .array(
-          z.object({
-            headline: z.string().max(28),
-            detail: z.string().max(140),
-            href: z.string().optional(),
-          })
-        )
-        .max(4)
-        .default([]),
-      phases: z
-        .array(
-          z.object({
-            id: z.string(),
-            status: z.enum(PHASE_STATUSES),
-            summary: z.string(),
-          })
-        )
-        .default([]),
-      relatedNotesSlugs: z.array(reference('notes')).default([]),
-      coverImage: image().optional(),
-      order: z.number().default(0),
-      progress: z.number().min(0).max(100).optional(),
-    }),
+  schema: z.object({
+    title: z.string(),
+    description: z.string(),
+    tagline: z.string().max(80).optional(),
+    category: z.enum(PROJECT_CATEGORIES),
+    active: z.boolean().default(false),
+    startDate: z.coerce.date(),
+    technologies: z.array(z.string()).default([]),
+    technologyNotes: z
+      .array(
+        z.object({
+          name: z.string(),
+          context: z.string(),
+        })
+      )
+      .default([]),
+    githubUrl: z.url().optional(),
+    websiteUrl: z.url().optional(),
+    highlights: z
+      .array(
+        z.object({
+          headline: z.string().max(28),
+          detail: z.string().max(140),
+          href: z.string().optional(),
+        })
+      )
+      .max(4)
+      .default([]),
+    phases: z
+      .array(
+        z.object({
+          id: z.string(),
+          status: z.enum(PHASE_STATUSES),
+          summary: z.string(),
+        })
+      )
+      .default([]),
+    relatedNotesSlugs: z.array(reference('notes')).default([]),
+    // The card image on /projects/ and the home page: a 16:10 image under
+    // public/, usually public/images/projects/<slug>/cover.webp.
+    cover: z
+      .object({
+        src: z.string(),
+        alt: z.string(),
+      })
+      .optional(),
+    order: z.number().default(0),
+    progress: z.number().min(0).max(100).optional(),
+  }),
 });
 
 const journal = defineCollection({
