@@ -14,7 +14,7 @@ export const milestones: Milestone[] = [
     date: '2026-10-18',
     kind: 'shipped',
     text: 'Submitted Kataribe to the AI Builder Cup 2026',
-    detail: "Google Cloud's hackathon; judging runs until Nov 6",
+    detail: "Google Cloud's hackathon; judging ran until Nov 6",
     href: '/projects/kataribe/',
   },
   {

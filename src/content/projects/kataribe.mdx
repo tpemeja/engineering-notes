@@ -1,9 +1,8 @@
 ---
 title: 'Kataribe'
-description: "Voice AI that talks with Japanese seniors for a few minutes a day on Gemini Live, and turns their memories into a life story their family can read, hear and ask more about. Submitted to Google Cloud's AI Builder Cup 2026, and waiting on the judges."
+description: "Voice AI that talks with Japanese seniors for a few minutes a day on Gemini Live, and turns their memories into a life story their family can read, hear and ask more about. Built in four weeks for Google Cloud's AI Builder Cup 2026, and kept as a static archive since judging ended."
 tagline: "Voice AI that turns a senior's memories into a life story for their family"
 category: 'Voice AI'
-active: true
 startDate: 2026-09-22
 technologies:
   [
@@ -13,6 +12,7 @@ technologies:
     'React',
     'TypeScript',
     'Google Cloud',
+    'AWS',
     'SQLite',
     'Playwright',
   ]
@@ -28,7 +28,9 @@ technologyNotes:
   - name: 'TypeScript'
     context: 'The frontend, which talks to Gemini Live directly through @google/genai on the token the backend minted.'
   - name: 'Google Cloud'
-    context: 'Cloud Run in Tokyo serving the whole app from one image, Firestore and Cloud Storage behind the storage port, Cloud Build for deploys, and uptime checks, Error Reporting and a budget alert to watch it.'
+    context: 'Through judging: Cloud Run in Tokyo serving the whole app from one image, Firestore and Cloud Storage behind the storage port, Cloud Build for deploys, and uptime checks, Error Reporting and a budget alert to watch it.'
+  - name: 'AWS'
+    context: 'The archive since the shutdown: S3 behind CloudFront, with a CloudFront Function routing each page and API path to the files saved from the service.'
   - name: 'SQLite'
     context: 'The store in development, with recordings on local disk. The same port runs on Firestore and Cloud Storage once deployed.'
   - name: 'pytest'
@@ -40,8 +42,8 @@ technologyNotes:
 githubUrl: 'https://github.com/kaseovo/kataribe'
 websiteUrl: 'https://kataribe.kaseovo.com'
 highlights:
-  - headline: 'Live for the judges'
-    detail: 'Anyone can try it on their own life, in English, at kataribe.kaseovo.com. It stays up until judging ends.'
+  - headline: 'Live through judging'
+    detail: 'Anyone could try it on their own life, in English, until Nov 10. The site now keeps the demo and its family page.'
     href: 'https://kataribe.kaseovo.com'
   - headline: '36 of 36 consent checks'
     detail: "A story reaches the family only on the person's own words of agreement. A no, a hesitation or no reply keeps it private."
@@ -88,9 +90,10 @@ it can.
 
 I built it in four weeks for Google Cloud's AI Builder Cup 2026, and wrote all
 of the code myself; my wife helped with the Japanese and with advice along the
-way. It is submitted, with a [live site](https://kataribe.kaseovo.com) where
-judges try it on their own life, the demo video above and a pitch deck, and
-now waits on the judges.
+way. It was submitted with a live site where judges could try it on their own
+life, the demo video above and a pitch deck. It did not make the top 50, so
+the service is shut down, and [kataribe.kaseovo.com](https://kataribe.kaseovo.com)
+keeps the demo and its family page as a static archive.
 
 <ProjectTimeline
   columns={[
@@ -127,13 +130,13 @@ now waits on the judges.
     },
     {
       label: 'Judging',
-      dates: 'Oct 19-Nov 6',
-      title: 'Waiting on results',
-      upcoming: true,
+      dates: 'Oct 19-Nov 10',
+      title: 'Judged, then archived',
       items: [
         { text: 'Live site kept up, checked every morning' },
         { text: 'Code frozen at the submitted commit' },
-        { text: 'Results', date: 'after Nov 6' },
+        { text: 'Not in the top 50' },
+        { text: 'Shut down, kept as a static archive', date: 'Nov 10' },
       ],
     },
   ]}
@@ -444,7 +447,7 @@ time first, then the family question), and it has held 6 of 6.
 <Screenshot
   src="/images/projects/kataribe/start-page.webp"
   alt="The Kataribe start page: the headline Every grandparent has stories nobody has asked about yet, buttons Watch it, See a life story and Try it on your own life, the embedded demo video, a Who it's for section with tabs For them, For their family and For their town marked Next, and a Your path through Kataribe card listing five steps with Go buttons"
-  caption="The start page at kataribe.kaseovo.com, with the demo video and the judge's path in the corner."
+  caption="The start page as judges saw it, with the demo video and the judge's path in the corner."
 />
 
 What the start page does for a stranger:
@@ -480,7 +483,7 @@ own, and the buttons show from that moment.
   title="Shipped and submitted"
   status="done"
   goal="Meet every submission rule of the AI Builder Cup by 2026-10-18, and keep the live site working for every judge until judging ends on 2026-11-06."
-  outcome="Submitted with a live Cloud Run URL, a 3:48 demo video and a pitch deck; waiting on the judges."
+  outcome="Submitted with a live Cloud Run URL, a 3:48 demo video and a pitch deck, and kept up through judging."
 >
 
 | The rule asks for | What we submitted |
@@ -507,13 +510,11 @@ Six of the deck's slides:
 
 Kept running through the evaluation:
 
-- **One instance stays warm** until 2026-11-06, since a cold start took 4.6 s.
+- **One instance stayed warm**, since a cold start took 4.6 s.
 - **Watched** by an uptime check, error emails and a budget alert, plus
   `make smoke` every morning: a judge's whole path on the live service,
   because a health check cannot see a Gemini key that stopped working.
-- **Frozen.** The submitted commit is what runs; only an outage gets a fix.
-- **Forgotten afterwards.** Every visitor persona is deleted on 2026-11-07,
-  as the start page promises.
+- **Frozen.** The submitted commit was what ran; only an outage got a fix.
 
 <DecisionTable
   decisions={[
@@ -548,6 +549,41 @@ health endpoint calls no model.
 
 </Phase>
 
+<Phase
+  id="archived"
+  title="Shut down, kept as an archive"
+  status="done"
+  goal="Stop paying for Google Cloud and Gemini once judging was over, and keep the page that shows what Kataribe does, with nothing left to talk to."
+  outcome="A static copy on S3 and CloudFront for cents a month; the Google Cloud project and its Gemini key deleted."
+>
+
+The pages read everything through the API, so the archive keeps the API's
+answers rather than the API. Before the shutdown, the demo's family page, its
+English and her seven quote clips were saved from the live service into the
+repository. A CloudFront Function routes each path to them, and one build flag
+takes out every way to talk.
+
+| Path | Until the shutdown | In the archive |
+|---|---|---|
+| `/`, `/family/{id}` | the React app, from Cloud Run | the same app, built with `VITE_ARCHIVE=1` |
+| `/api/family/{id}` | Firestore, only the stories she shared | `{id}.json`, saved before the shutdown |
+| A quote's `/audio` | her turn, cut from the recording in Cloud Storage | `audio.wav`, saved the same way |
+| `/talk/{id}`, `/console` | a conversation, the team's console | back to the start page |
+
+`/api/family/{id}` and `/api/family/{id}/translations` cannot both be files on
+disk, so the function adds `.json` to each API path. Then the Gemini key, the
+budget, billing and the project went, and every visitor's recording with
+them, as the start page promised.
+
+<Callout variant="warning" title="A key in use refuses to be deleted">
+Google Cloud would not delete the Gemini key: it had served requests in the
+last seven days, which is exactly when a leaked or forgotten key matters
+most. `gcloud services api-keys delete` takes `--no-check-existing-usage` to
+skip that check.
+</Callout>
+
+</Phase>
+
 </PhaseLedger>
 
 ## Tech stack
@@ -558,7 +594,7 @@ What each piece of the stack is actually doing, and where to look for more:
 
 ## Future improvements
 
-- **Native Japanese review.** The demo was voiced by AI and judges talk in
+- **Native Japanese review.** The demo was voiced by AI and judges talked in
   English, so prompt changes have gone unreviewed in the language that ships.
   Whether a light restatement like 〜なんですね reads as warm aizuchi or as
   parroting is a native speaker's call.
