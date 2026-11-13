@@ -2,7 +2,13 @@ import { getCollection } from 'astro:content';
 import { OGImageRoute } from 'astro-og-canvas';
 import { site } from '../../data/site';
 
-const [projects, notes] = await Promise.all([getCollection('projects'), getCollection('notes')]);
+const isProd = import.meta.env.PROD;
+
+// Drafts get no image in production, as they get no page.
+const [projects, notes] = await Promise.all([
+  getCollection('projects'),
+  getCollection('notes', ({ data }) => !isProd || data.status !== 'draft'),
+]);
 
 const pages = {
   default: { title: site.title, description: site.description },

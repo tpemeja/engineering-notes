@@ -12,6 +12,7 @@ export const NOTE_CATEGORIES = [
   'System Design',
   'MCP',
   'APIs',
+  'Algorithms',
 ] as const;
 
 export const PROJECT_CATEGORIES = [
