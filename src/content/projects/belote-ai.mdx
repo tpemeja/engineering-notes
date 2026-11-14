@@ -31,8 +31,8 @@ githubUrl: 'https://github.com/tpemeja/belote-ai'
 highlights:
   - headline: '+38.7 pts/deal'
     detail: 'Monte Carlo policy improvement over the best hand-written rule, the largest gain on the ladder.'
-  - headline: '148x faster'
-    detail: 'A search-free network agent that ties Monte Carlo search over a 6,000-deal match.'
+  - headline: '0.9 ms instead of 120 ms'
+    detail: 'Per deal: a search-free network agent that ties Monte Carlo search over a 6,000-deal match.'
   - headline: 'Fix merged upstream'
     detail: "Found and fixed a seeding bug in OpenSpiel's Python ISMCTS."
     href: 'https://github.com/google-deepmind/open_spiel/pull/1584'
@@ -72,7 +72,7 @@ Carlo search to neural networks and a local language model.
 The strongest card play contains no network. One step of Monte Carlo policy
 improvement over a hand-written rule is the largest gain on the ladder, and
 the networks buy speed rather than strength: a search-free agent ties that
-search at 148x the speed. Building the game's resampler also surfaced a
+search in 0.9 ms a deal instead of 120 ms. Building the game's resampler also surfaced a
 seeding bug in OpenSpiel's own ISMCTS, fixed upstream in
 [open_spiel#1584](https://github.com/google-deepmind/open_spiel/pull/1584).
 
@@ -340,7 +340,7 @@ deal against 120, and loses to the search head to head, -5.17 [-6.59,
   title="BidNet and the search-free agent"
   status="done"
   goal="Replace the hand-written bid rule with a network, then assemble both networks into an agent with no search at run time."
-  outcome="BidNet out-bids the rule by +5.59; with PlayNet it ties Monte Carlo at 148x the speed."
+  outcome="BidNet out-bids the rule by +5.59; with PlayNet it ties Monte Carlo in 0.9 ms a deal instead of 120."
 >
 
 The auction has no teacher, so each bid's value is measured by playing it
