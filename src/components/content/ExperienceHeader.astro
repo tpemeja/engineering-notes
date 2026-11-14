@@ -4,14 +4,28 @@ interface Props {
   company: string;
   location: string;
   dates: string;
+  // One line on what the company does, under the location and dates.
+  summary?: string;
+  // The role's page under /experience/, shown as a link beside the title.
+  caseStudy?: string;
 }
 
-const { role, company, location, dates } = Astro.props;
+const { role, company, location, dates, summary, caseStudy } = Astro.props;
 ---
 
 <div class="exp-header not-prose">
-  <p class="exp-title">{role} — {company}</p>
+  <div class="exp-top">
+    <p class="exp-title">{role} — {company}</p>
+    {
+      caseStudy && (
+        <a href={caseStudy} class="exp-case-study">
+          Case study &rarr;
+        </a>
+      )
+    }
+  </div>
   <p class="exp-meta">{location} · {dates}</p>
+  {summary && <p class="exp-summary">{summary}</p>}
 </div>
 
 <style>
@@ -23,14 +37,48 @@ const { role, company, location, dates } = Astro.props;
     margin-top: 0;
   }
 
+  .exp-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+  }
+
   .exp-title {
     margin: 0;
     font-weight: 600;
   }
 
+  .exp-case-study {
+    flex: none;
+    padding: 0.2rem 0.7rem;
+    border: 1px solid var(--color-accent);
+    border-radius: 9999px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-accent);
+    text-decoration: none;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .exp-case-study:hover {
+    background-color: var(--color-accent);
+    color: var(--color-accent-fg);
+  }
+
   .exp-meta {
     margin: 0.2rem 0 0 0;
     font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+
+  .exp-summary {
+    margin: 0.35rem 0 0 0;
+    font-size: 0.9375rem;
+    font-style: italic;
     color: var(--color-fg-muted);
   }
 </style>
