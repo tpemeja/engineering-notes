@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://engineering.kaseovo.com/sitemap-index.xml
+Sitemap: https://tanguy.kaseovo.com/sitemap-index.xml

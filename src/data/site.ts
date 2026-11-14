@@ -3,7 +3,7 @@ export const site = {
   tagline: 'A public engineering notebook',
   description:
     "Projects and technical notes documented in public: what I'm building, what I'm learning, and the decisions along the way.",
-  url: 'https://engineering.kaseovo.com',
+  url: 'https://tanguy.kaseovo.com',
   author: 'Tanguy PEMEJA',
   githubUser: 'tpemeja',
   githubRepo: 'engineering-notes',

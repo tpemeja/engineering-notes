@@ -11,7 +11,7 @@ import { remarkHeadingId } from './src/lib/remark-heading-id.mjs';
 
 // https://astro.build/config
 export default defineConfig({
-  site: 'https://engineering.kaseovo.com',
+  site: 'https://tanguy.kaseovo.com',
 
   // The journal was folded into the notes; keep its old links working.
   redirects: {

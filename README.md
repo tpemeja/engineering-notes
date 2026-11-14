@@ -68,10 +68,12 @@ involved. Cloudflare builds and deploys automatically on every push to
   Cloudflare detects pnpm from `pnpm-lock.yaml` for the install step)
 - **Build output directory**: `dist`
 
-The custom domain (`engineering.kaseovo.com`) is attached under the Pages
+The custom domain (`tanguy.kaseovo.com`) is attached under the Pages
 project's **Custom domains** tab — a one-time manual step, not part of the
-build. `astro.config.mjs`'s `site` field is already set to match; update it
-if the domain changes.
+build. `astro.config.mjs`'s `site` field and `src/data/site.ts`'s `url` are
+set to match, along with the sitemap line in `public/robots.txt`; update all
+three if the domain changes. The original domain, `engineering.kaseovo.com`,
+still serves the same site.
 
 No repository secrets are needed for deployment. `pnpm-workspace.yaml`'s
 `allowBuilds: esbuild: true` is still required though — it approves
