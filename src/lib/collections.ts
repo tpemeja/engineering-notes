@@ -11,6 +11,16 @@ export async function getPublishedProjects(): Promise<CollectionEntry<'projects'
   });
 }
 
+// Work case studies, most recent employer first.
+export async function getPublishedExperience(): Promise<CollectionEntry<'experience'>[]> {
+  const entries = await getCollection('experience');
+  return entries.sort((a, b) => b.data.startDate.valueOf() - a.data.startDate.valueOf());
+}
+
+export function stackItems(entry: CollectionEntry<'experience'>): string[] {
+  return entry.data.stack.flatMap((group) => group.items);
+}
+
 export async function getPublishedNotes(): Promise<CollectionEntry<'notes'>[]> {
   const entries = await getCollection('notes', ({ data }) => !isProd || data.status !== 'draft');
   return entries.sort((a, b) => b.data.lastUpdated.valueOf() - a.data.lastUpdated.valueOf());

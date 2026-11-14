@@ -1,0 +1,104 @@
+---
+// Every role, newest first, from src/data/experience.ts: on the home page and
+// under "All roles" on /experience/. A role with a case study links to it.
+import { experience } from '../../data/experience';
+---
+
+<ol class="experience">
+  {
+    experience.map(({ role, company, location, dates, caseStudy }) => (
+      <li>
+        <div class="experience-role">
+          <strong>{role}</strong>
+          <span>
+            {company} · {location}
+          </span>
+          {caseStudy && (
+            <a href={caseStudy} class="experience-case-study">
+              Case study &rarr;
+            </a>
+          )}
+        </div>
+        <span class="experience-dates">{dates}</span>
+      </li>
+    ))
+  }
+</ol>
+
+<style>
+  .experience {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .experience li {
+    position: relative;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0 0 1.1rem 1.25rem;
+  }
+
+  .experience li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.45rem;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    border: 2px solid var(--color-accent);
+    background-color: var(--color-bg);
+  }
+
+  .experience li:first-child::before {
+    background-color: var(--color-accent);
+  }
+
+  .experience li:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: calc(0.25rem - 0.5px);
+    top: 1.1rem;
+    bottom: 0.15rem;
+    width: 1px;
+    background-color: var(--color-border);
+  }
+
+  .experience-role {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+
+  .experience-role strong {
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  .experience-role span {
+    font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+
+  .experience-case-study {
+    width: fit-content;
+    margin-top: 0.15rem;
+    font-size: 0.8125rem;
+    color: var(--color-accent);
+    text-decoration: none;
+  }
+
+  .experience-case-study:hover {
+    text-decoration: underline;
+  }
+
+  .experience-dates {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--color-fg-muted);
+  }
+</style>

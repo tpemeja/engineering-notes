@@ -19,6 +19,7 @@ const CATEGORY_BY_TAG: Record<string, TagCategory> = {
   starlette: 'Frameworks',
   'jetpack compose': 'Frameworks',
   react: 'Frameworks',
+  flask: 'Frameworks',
 
   openspiel: 'AI/ML',
   pytorch: 'AI/ML',
@@ -37,6 +38,7 @@ const CATEGORY_BY_TAG: Record<string, TagCategory> = {
   'kotlinx.serialization': 'Libraries',
   pyscenedetect: 'Libraries',
   datastore: 'Libraries',
+  primevue: 'Libraries',
 
   pytest: 'Tooling',
   playwright: 'Tooling',
@@ -45,6 +47,8 @@ const CATEGORY_BY_TAG: Record<string, TagCategory> = {
   ffmpeg: 'Tooling',
   encryptedsharedpreferences: 'Tooling',
   workmanager: 'Tooling',
+  postman: 'Tooling',
+  packer: 'Tooling',
 
   'instagram graph api': 'APIs & Platforms',
 };

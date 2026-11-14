@@ -1,4 +1,4 @@
-import { getPublishedNotes, getPublishedProjects } from './collections';
+import { getPublishedExperience, getPublishedNotes, getPublishedProjects, stackItems } from './collections';
 import { readingList } from '../data/reading-list';
 
 export interface TaggedEntry {
@@ -6,7 +6,9 @@ export interface TaggedEntry {
   description: string;
   href: string;
   date: Date;
-  kind: 'project' | 'note' | 'book';
+  // Shown instead of `date` when a single day would mislead, e.g. a job.
+  dateLabel?: string;
+  kind: 'project' | 'experience' | 'note' | 'book';
 }
 
 export function slugifyTag(tag: string): string {
@@ -23,7 +25,11 @@ interface TagBucket {
 }
 
 async function buildTagBuckets(): Promise<Map<string, TagBucket>> {
-  const [projects, notes] = await Promise.all([getPublishedProjects(), getPublishedNotes()]);
+  const [projects, experience, notes] = await Promise.all([
+    getPublishedProjects(),
+    getPublishedExperience(),
+    getPublishedNotes(),
+  ]);
 
   const buckets = new Map<string, TagBucket>();
 
@@ -44,6 +50,18 @@ async function buildTagBuckets(): Promise<Map<string, TagBucket>> {
       kind: 'project',
     };
     for (const tech of entry.data.technologies) add(tech, tagged);
+  }
+
+  for (const entry of experience) {
+    const tagged: TaggedEntry = {
+      title: entry.data.title,
+      description: entry.data.description,
+      href: `/experience/${entry.id}/`,
+      date: entry.data.startDate,
+      dateLabel: entry.data.dates,
+      kind: 'experience',
+    };
+    for (const tech of stackItems(entry)) add(tech, tagged);
   }
 
   for (const entry of notes) {

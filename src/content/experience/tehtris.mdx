@@ -1,0 +1,60 @@
+---
+title: 'TEHTRIS'
+description: "TEHTRIS is a European XDR cybersecurity vendor (EDR, EPP, SIEM, SOAR). I joined in France as a Junior R&D Cybersecurity Consultant, then was selected through an internal application as one of six people to open the company's Tokyo office, where I worked as a Cybersecurity Engineer."
+company: 'TEHTRIS'
+role: 'Junior R&D Cybersecurity Consultant, then Cybersecurity Engineer'
+location: 'Pessac, France, then Tokyo, Japan'
+dates: 'Sep 2021 to May 2024'
+startDate: 2021-09-01
+stack:
+  - group: 'Backend'
+    items: ['Python', 'FastAPI', 'Flask', 'OpenAPI']
+  - group: 'Cloud & Infrastructure'
+    items: ['OVH Cloud', 'Packer', 'Airflow']
+  - group: 'Observability & Operations'
+    items: ['Grafana', 'PagerDuty']
+  - group: 'Identity & Security'
+    items: ['Okta']
+  - group: 'Testing'
+    items: ['Postman']
+---
+
+import StackGroups from '../../components/content/StackGroups.astro';
+
+## What I owned
+
+**Tokyo (Dec 2022 to May 2024)**
+
+- **Customer provisioning platform.** Co-built with an engineer in France: a self-service pipeline that deploys a full multi-server customer instance on OVH Cloud. See below.
+- **APAC incident triage.** First point of contact during APAC hours for the three-person Tokyo team, on call through PagerDuty: assessed production issues and regional customer escalations, and decided when to escalate to engineering in France or Canada, or directly to the CTO. Extended Grafana dashboards and alert thresholds.
+
+**France (Sep 2021 to Dec 2022)**
+
+- **Public XDR API layer (FastAPI).** Exposed the platform's internal APIs to customers and external tools through a simpler, secured interface: reviewed the API contracts, generated documentation from the OpenAPI spec, and covered it with Postman test suites.
+- **Internal operations platform.** Built alone: a FastAPI backend with a lightweight web UI giving internal users, including support teams and staff working abroad, scoped access to the company's OVH Cloud environments through Okta login and custom roles and actions.
+
+## From 3-4 days to 2 hours: provisioning a customer platform
+
+**Problem.** Each new customer got their own instance of the platform, made of several servers on OVH Cloud. Deploying one took 3 to 4 days: servers were set up by hand, each step waited on the previous one, and the deployment team went back and forth with other teams for license provisioning, network configuration and checking the result.
+
+**Constraint.** The product ran on full virtual machines, not containers, and changing that was out of our hands. The solution had to be built around machine images rather than a container platform, which is why we used Packer for images and Airflow to orchestrate the steps.
+
+**Design.** With an engineer in France, I built a self-service pipeline for the deployment team. They enter the customer's details, such as the license key, in a small web app. Packer builds custom OS images with that configuration baked in, and Airflow runs the rest: creating the servers, configuring the network, applying the license, and running setup tests before reporting back. I focused on the build side, the images and the orchestration; my teammate built the intake and reporting app. We split the work by responsibility and unblocked each other across the 8-hour time difference.
+
+**Result.** Deploying a new customer went from 3-4 days to about 2 hours. Other teams still provide the inputs up front, but once they're in, the deployment runs end to end without waiting on anyone.
+
+**What I'd change.** With hundreds of servers to keep running, I'd move to containers, manage the infrastructure as code with Terraform, and possibly run it on Kubernetes. That would have needed more people to set up than our team had at the time, which is why we optimized within the VM model first.
+
+## Opening the Tokyo office: incident triage for APAC
+
+**Context.** In Tokyo, our team of three was the company's first line during APAC hours, outside the working hours of engineering in France and Canada. When something broke, I usually made the call: fix it ourselves, escalate to engineering, or call the CTO directly.
+
+**One incident.** A backend change shipped by R&D broke some scheduled API calls that ran about every minute, and each call now wrote its own log file. The files were tiny, so disk space looked fine, but there were so many that the server ran out of inodes and the disk switched to read-only. Inode usage wasn't monitored, so nothing had warned us.
+
+**Decision.** Before escalating, I traced the problem to its origin: the read-only disk, the inode exhaustion, the flood of small log files, and the API change behind them. Fixing it needed permissions our team didn't have, so I called the CTO directly with the diagnosis in hand, and we fixed it together.
+
+**Follow-up.** I added inode usage to our internal monitoring, so the same failure is detected early next time.
+
+## Stack
+
+<StackGroups groups={frontmatter.stack} />

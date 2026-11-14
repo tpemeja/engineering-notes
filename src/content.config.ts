@@ -91,6 +91,36 @@ const notes = defineCollection({
   }),
 });
 
+// A case study of one employer, listed on /experience/ and the home page and
+// linked from the resume. Same header and prose as a project page, but no
+// phases or highlights: the body is the role's own write-up.
+const experience = defineCollection({
+  loader: glob({ pattern: '**/*.mdx', base: './src/content/experience' }),
+  schema: z.object({
+    // The page's h1, e.g. "Senior Backend Developer, EDGEMATRIX".
+    title: z.string(),
+    // The intro paragraph under the title, also the meta description.
+    description: z.string(),
+    // What the cards show: the employer, and the role or roles held there.
+    company: z.string(),
+    role: z.string(),
+    location: z.string(),
+    // Shown as written ("May 2024 to present"); startDate only sorts.
+    dates: z.string(),
+    startDate: z.coerce.date(),
+    // The Stack section, in groups. Every item is also a tag, so it links to
+    // the projects and notes that use the same technology.
+    stack: z
+      .array(
+        z.object({
+          group: z.string(),
+          items: z.array(z.string()),
+        })
+      )
+      .default([]),
+  }),
+});
+
 const pages = defineCollection({
   loader: glob({ pattern: '**/*.mdx', base: './src/content/pages' }),
   schema: z.object({
@@ -101,4 +131,4 @@ const pages = defineCollection({
   }),
 });
 
-export const collections = { projects, notes, pages };
+export const collections = { projects, notes, experience, pages };

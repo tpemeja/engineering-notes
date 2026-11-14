@@ -1,0 +1,94 @@
+---
+import type { CollectionEntry } from 'astro:content';
+import BaseLayout from './BaseLayout.astro';
+import Prose from '../components/content/Prose.astro';
+import RelatedContent from '../components/content/RelatedContent.astro';
+import { getPublishedExperience } from '../lib/collections';
+
+// The project page's header and prose, for a role instead of a project.
+interface Props {
+  entry: CollectionEntry<'experience'>;
+}
+
+const { entry } = Astro.props;
+const { title, description, location, dates } = entry.data;
+
+const otherCaseStudies = (await getPublishedExperience()).filter((other) => other.id !== entry.id);
+---
+
+<BaseLayout title={title} description={description} ogImagePath={`/open-graph/experience/${entry.id}.png`} type="article">
+  <article class="page-container">
+    <header class="experience-header">
+      <p class="experience-breadcrumb">
+        <a href="/experience/">Experience</a>
+        <span aria-hidden="true">/</span>
+        <a href="/resume/">Resume</a>
+      </p>
+      <h1>{title}</h1>
+      <p class="experience-meta">{location} · {dates}</p>
+      <p class="experience-description">{description}</p>
+    </header>
+
+    <Prose>
+      <slot />
+    </Prose>
+
+    <RelatedContent title="Other case studies" experience={otherCaseStudies} minCardWidth="24rem" />
+  </article>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 64rem;
+    margin-inline: auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .experience-header {
+    margin-bottom: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.9rem;
+  }
+
+  .experience-breadcrumb {
+    margin: 0;
+    display: flex;
+    gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-fg-muted);
+  }
+
+  .experience-breadcrumb a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .experience-breadcrumb a:hover {
+    color: var(--color-accent);
+  }
+
+  .experience-header h1 {
+    margin: 0;
+    font-size: clamp(2rem, 4vw, 2.5rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  .experience-meta {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--color-fg-muted);
+  }
+
+  .experience-description {
+    margin: 0;
+    max-width: 48rem;
+    color: var(--color-fg-muted);
+    font-size: 1.125rem;
+    line-height: 1.6;
+  }
+</style>

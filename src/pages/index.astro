@@ -2,12 +2,17 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import ProjectCard from '../components/content/ProjectCard.astro';
 import HomeSection from '../components/content/HomeSection.astro';
-import { getPublishedProjects, getPublishedNotes } from '../lib/collections';
+import ExperienceCard from '../components/content/ExperienceCard.astro';
+import ExperienceTimeline from '../components/content/ExperienceTimeline.astro';
+import { getPublishedProjects, getPublishedNotes, getPublishedExperience } from '../lib/collections';
 import { formatDateShort } from '../lib/dates';
 import { profile, site } from '../data/site';
-import { experience } from '../data/experience';
 
-const [projects, notes] = await Promise.all([getPublishedProjects(), getPublishedNotes()]);
+const [projects, notes, caseStudies] = await Promise.all([
+  getPublishedProjects(),
+  getPublishedNotes(),
+  getPublishedExperience(),
+]);
 
 const featuredProjects = profile.featuredProjects
   .map((slug) => projects.find((project) => project.id === slug))
@@ -96,23 +101,19 @@ const isExternal = (href: string) => /^https?:\/\//.test(href);
       </div>
     </HomeSection>
 
+    {
+      caseStudies.length > 0 && (
+        <HomeSection title="Work case studies" href="/experience/" linkLabel="All experience" id="case-studies">
+          <div class="case-study-grid">
+            {caseStudies.map((entry) => <ExperienceCard entry={entry} />)}
+          </div>
+        </HomeSection>
+      )
+    }
+
     <div class="home-columns">
-      <HomeSection title="Experience" href="/resume/" linkLabel="Full resume">
-        <ol class="experience">
-          {
-            experience.map(({ role, company, location, dates }) => (
-              <li>
-                <div class="experience-role">
-                  <strong>{role}</strong>
-                  <span>
-                    {company} · {location}
-                  </span>
-                </div>
-                <span class="experience-dates">{dates}</span>
-              </li>
-            ))
-          }
-        </ol>
+      <HomeSection title="Experience" href="/resume/" linkLabel="Full resume" id="experience">
+        <ExperienceTimeline />
       </HomeSection>
 
       {
@@ -306,76 +307,20 @@ const isExternal = (href: string) => /^https?:\/\//.test(href);
     gap: 1.5rem;
   }
 
+  /* Case studies */
+
+  .case-study-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+  }
+
   /* Experience and writing */
 
   .home-columns {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 3rem;
-  }
-
-  .experience {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .experience li {
-    position: relative;
-    display: flex;
-    justify-content: space-between;
-    align-items: baseline;
-    gap: 1rem;
-    padding: 0 0 1.1rem 1.25rem;
-  }
-
-  .experience li::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0.45rem;
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 9999px;
-    border: 2px solid var(--color-accent);
-    background-color: var(--color-bg);
-  }
-
-  .experience li:first-child::before {
-    background-color: var(--color-accent);
-  }
-
-  .experience li:not(:last-child)::after {
-    content: '';
-    position: absolute;
-    left: calc(0.25rem - 0.5px);
-    top: 1.1rem;
-    bottom: 0.15rem;
-    width: 1px;
-    background-color: var(--color-border);
-  }
-
-  .experience-role {
-    display: flex;
-    flex-direction: column;
-    gap: 0.1rem;
-  }
-
-  .experience-role strong {
-    font-size: 0.9375rem;
-    font-weight: 600;
-  }
-
-  .experience-role span {
-    font-size: 0.875rem;
-    color: var(--color-fg-muted);
-  }
-
-  .experience-dates {
-    flex: none;
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--color-fg-muted);
   }
 
   .writing {
@@ -451,7 +396,8 @@ const isExternal = (href: string) => /^https?:\/\//.test(href);
       gap: 2.75rem;
     }
 
-    .work-grid {
+    .work-grid,
+    .case-study-grid {
       grid-template-columns: minmax(0, 1fr);
     }
   }
