@@ -1,0 +1,156 @@
+---
+// A work case study as a card: on /experience/, the home page, and under
+// "Other case studies". Same frame as ProjectCard, without the cover.
+import type { CollectionEntry } from 'astro:content';
+import { stackItems } from '../../lib/collections';
+
+interface Props {
+  entry: CollectionEntry<'experience'>;
+  headingLevel?: 'h2' | 'h3';
+}
+
+const { entry, headingLevel = 'h3' } = Astro.props;
+const { company, role, location, dates, description } = entry.data;
+
+const Heading = headingLevel;
+const MAX_TECH = 5;
+const tech = stackItems(entry);
+const shownTech = tech.slice(0, MAX_TECH);
+const hiddenTech = tech.length - shownTech.length;
+---
+
+<article class="experience-card">
+  <p class="experience-card-kicker">{location} · {dates}</p>
+  <Heading class="experience-card-title">
+    <a href={`/experience/${entry.id}/`}>{company}</a>
+  </Heading>
+  <p class="experience-card-role">{role}</p>
+  <p class="experience-card-description">{description}</p>
+
+  <div class="experience-card-footer">
+    <ul class="experience-card-tech" aria-label="Stack">
+      {shownTech.map((item) => <li>{item}</li>)}
+      {hiddenTech > 0 && <li class="experience-card-more">+{hiddenTech}</li>}
+    </ul>
+    <span class="experience-card-cta" aria-hidden="true">Read case study &rarr;</span>
+  </div>
+</article>
+
+<style>
+  .experience-card {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 1.15rem 1.25rem 1.1rem;
+    border: 1px solid var(--color-border);
+    border-top: 2px solid var(--color-accent);
+    border-radius: 0.75rem;
+    background-color: var(--color-bg);
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .experience-card:hover,
+  .experience-card:focus-within {
+    border-color: var(--color-accent);
+    box-shadow: 0 12px 32px -16px color-mix(in oklab, var(--color-fg) 35%, transparent);
+    transform: translateY(-2px);
+  }
+
+  .experience-card-kicker {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--color-fg-muted);
+  }
+
+  .experience-card-title {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 650;
+    line-height: 1.25;
+  }
+
+  .experience-card-title a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  /* The title link covers the whole card. */
+  .experience-card-title a::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+  }
+
+  .experience-card-title a:focus-visible {
+    outline: none;
+  }
+
+  .experience-card:has(.experience-card-title a:focus-visible) {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  .experience-card-role {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 600;
+  }
+
+  .experience-card-description {
+    margin: 0;
+    color: var(--color-fg-muted);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .experience-card-footer {
+    margin-top: auto;
+    padding-top: 0.6rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.6rem 0.75rem;
+  }
+
+  .experience-card-tech {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .experience-card-tech li {
+    padding: 0.2rem 0.5rem;
+    border: 1px solid var(--color-border);
+    border-radius: 9999px;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    line-height: 1.2;
+    color: var(--color-fg-muted);
+  }
+
+  .experience-card-tech .experience-card-more {
+    border-style: dashed;
+  }
+
+  .experience-card-cta {
+    flex: none;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-accent);
+  }
+</style>

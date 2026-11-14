@@ -48,6 +48,7 @@ export const profile = {
 
 export const nav = [
   { label: 'Projects', href: '/projects/' },
+  { label: 'Experience', href: '/experience/' },
   { label: 'Notes', href: '/notes/' },
   { label: 'Now', href: '/now/' },
   { label: 'About', href: '/about/' },

@@ -1,25 +1,32 @@
 ---
 import type { CollectionEntry } from 'astro:content';
 import ProjectCard from './ProjectCard.astro';
+import ExperienceCard from './ExperienceCard.astro';
 import NoteCard from './NoteCard.astro';
 
 interface Props {
   title?: string;
   projects?: CollectionEntry<'projects'>[];
+  experience?: CollectionEntry<'experience'>[];
   notes?: CollectionEntry<'notes'>[];
+  // Narrowest a card may get before the grid drops a column.
+  minCardWidth?: string;
 }
 
-const { title = 'Related', projects = [], notes = [] } = Astro.props;
-const hasContent = projects.length > 0 || notes.length > 0;
+const { title = 'Related', projects = [], experience = [], notes = [], minCardWidth = '220px' } = Astro.props;
+const hasContent = projects.length > 0 || experience.length > 0 || notes.length > 0;
 ---
 
 {
   hasContent && (
     <section class="related-content not-prose" aria-label={title}>
       <h2>{title}</h2>
-      <div class="related-grid">
+      <div class="related-grid" style={`--related-min: ${minCardWidth}`}>
         {projects.map((project) => (
           <ProjectCard project={project} />
+        ))}
+        {experience.map((entry) => (
+          <ExperienceCard entry={entry} />
         ))}
         {notes.map((note) => (
           <NoteCard note={note} />
@@ -46,7 +53,7 @@ const hasContent = projects.length > 0 || notes.length > 0;
 
   .related-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--related-min)), 1fr));
     gap: 1rem;
   }
 </style>

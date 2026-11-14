@@ -1,0 +1,83 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import ExperienceCard from '../../components/content/ExperienceCard.astro';
+import ExperienceTimeline from '../../components/content/ExperienceTimeline.astro';
+import HomeSection from '../../components/content/HomeSection.astro';
+import { getPublishedExperience } from '../../lib/collections';
+
+const caseStudies = await getPublishedExperience();
+---
+
+<BaseLayout
+  title="Experience"
+  description="Case studies from my work at EDGEMATRIX and TEHTRIS: what I owned, and a closer look at the problems I worked on."
+>
+  <div class="page-container">
+    <header class="page-header">
+      <h1>Experience</h1>
+      <p>
+        Case studies from my jobs: what I owned, and a closer look at a few
+        problems I worked on. For things I've built outside work, see <a href="/projects/">Projects</a>.
+      </p>
+    </header>
+
+    <div class="case-study-grid">
+      {caseStudies.map((entry) => <ExperienceCard entry={entry} headingLevel="h2" />)}
+    </div>
+
+    <div class="all-roles">
+      <HomeSection title="All roles" href="/resume/" linkLabel="Full resume">
+        <ExperienceTimeline />
+      </HomeSection>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .page-container {
+    max-width: 72rem;
+    margin-inline: auto;
+    padding: 2.5rem 1.5rem 4rem;
+  }
+
+  .page-header {
+    margin-bottom: 2rem;
+  }
+
+  .page-header h1 {
+    margin: 0 0 0.75rem;
+    font-size: clamp(2.5rem, 5vw, 3.5rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  .page-header p {
+    max-width: 40rem;
+    margin: 0;
+    color: var(--color-fg-muted);
+    font-size: 1.0625rem;
+    line-height: 1.6;
+  }
+
+  .page-header a {
+    color: var(--color-accent);
+  }
+
+  .case-study-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+  }
+
+  .all-roles {
+    max-width: 36rem;
+    margin-top: 3.5rem;
+  }
+
+  @media (max-width: 640px) {
+    .case-study-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

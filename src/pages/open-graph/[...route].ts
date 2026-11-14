@@ -5,14 +5,16 @@ import { site } from '../../data/site';
 const isProd = import.meta.env.PROD;
 
 // Drafts get no image in production, as they get no page.
-const [projects, notes] = await Promise.all([
+const [projects, notes, experience] = await Promise.all([
   getCollection('projects'),
   getCollection('notes', ({ data }) => !isProd || data.status !== 'draft'),
+  getCollection('experience'),
 ]);
 
 const pages = {
   default: { title: site.title, description: site.description },
   ...Object.fromEntries(projects.map((entry) => [`projects/${entry.id}`, entry.data])),
+  ...Object.fromEntries(experience.map((entry) => [`experience/${entry.id}`, entry.data])),
   ...Object.fromEntries(notes.map((entry) => [`notes/${entry.id}`, { title: entry.data.title, description: entry.data.summary }])),
 };
 

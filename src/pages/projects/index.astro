@@ -37,7 +37,7 @@ const categories = PROJECT_CATEGORIES.map((category) => ({
         Things I've built outside work, from serverless backends to voice AI
         and game-playing agents. Each page covers the problem, the approach,
         what shipped and what I measured, written as the work happens rather
-        than after the fact.
+        than after the fact. For my work at EDGEMATRIX and TEHTRIS, see the <a href="/experience/">case studies</a>.
       </p>
       <CategoryFilter
         label="Filter projects by category"
@@ -70,6 +70,10 @@ const categories = PROJECT_CATEGORIES.map((category) => ({
     font-weight: 700;
     line-height: 1;
     letter-spacing: -0.03em;
+  }
+
+  .page-header p a {
+    color: var(--color-accent);
   }
 
   .page-header p {

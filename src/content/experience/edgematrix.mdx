@@ -1,0 +1,64 @@
+---
+title: 'Senior Backend Developer, EDGEMATRIX'
+description: 'EDGEMATRIX runs an edge AI platform: Linux stations installed at customer sites run AI video-analytics apps chosen from a cloud marketplace. Small team of one manager and four developers.'
+company: 'EDGEMATRIX'
+role: 'Senior Backend Developer'
+location: 'Tokyo, Japan'
+dates: 'May 2024 to present'
+startDate: 2024-05-01
+stack:
+  - group: 'Backend'
+    items: ['Python', 'FastAPI', 'WebSockets']
+  - group: 'Edge & Networking'
+    items: ['D-Bus', 'Docker Compose', 'Traefik', 'Cloudflare Tunnel', 'ngrok', 'Chrony']
+  - group: 'Observability & Operations'
+    items: ['Prometheus', 'Grafana', 'Loki']
+  - group: 'Cloud & Infrastructure'
+    items: ['AWS', 'Elastic Beanstalk', 'S3', 'ECR', 'CloudWatch']
+  - group: 'Identity & Security'
+    items: ['Auth0', 'Authelia']
+  - group: 'Frontend'
+    items: ['Vue', 'PrimeVue']
+  - group: 'AI'
+    items: ['MCP']
+---
+
+import StackGroups from '../../components/content/StackGroups.astro';
+
+## What I owned
+
+- **Station device-management API (FastAPI).** Sole maintainer and author of most of it. The REST backend the station's web UI and machine-to-machine integrations use to configure and operate the device:
+  - Networking: Ethernet, Wi-Fi and LTE connections, hostname and host entries, port forwarding.
+  - Time: system clock, time zone, NTP servers.
+  - Access control: local accounts and machine-to-machine API tokens with role-based access.
+  - Remote access: pluggable providers (Cloudflare Tunnel, ngrok, remote SSH, device console) and DNS providers, plus customer-granted support tunnels.
+  - Device operations: software stack version and service status, log levels, license sync with the cloud, reboot and power-off.
+  - Health: diagnostics and a Prometheus metrics endpoint.
+- **Host control.** Extended the Python D-Bus service that lets the containerized backend act on the Linux host without extra privileges (time sync, stack upgrades, license sync), and took live upgrade progress over WebSocket from proof of concept to production.
+- **Station runtime.** The Docker Compose stack behind Traefik and Authelia, and its CI.
+- **Cloud side.** Device lifecycle, configuration delivery and synchronization services, with a staging environment for releases. Set up CloudWatch dashboards, log views and alarms. Moved internal platform login from GitHub to Auth0, so staff without GitHub accounts can sign in with Google, with finer-grained roles and room for other identity providers later. Contributed to the secure update pipeline.
+- **Observability.** On-station Grafana and Loki, and a read-only MCP prototype for LLM-assisted diagnosis.
+
+## One interface, many ways in
+
+**Problem.** Stations sit on customer networks we don't control. Often there is no public IP, sometimes the station is on LTE behind carrier NAT or behind a corporate firewall, and at some sites it can only be reached from the local network. When I joined, a station could only be reached under one predefined hostname, because routing was built around it, and remote access existed only as an ngrok proof of concept. Customers kept asking to use their own domain names.
+
+**Why a shared design.** Every access method needed the same things: retries when a connection fails, recovery after a reboot, and changes to the station's routing and authentication. Building that separately for each method would have meant duplicating the hardest parts.
+
+**Design.** I turned access into interchangeable providers: remote access (Cloudflare Tunnel, ngrok, remote SSH, device console), port forwarding and DNS. Each follows the same lifecycle (create, update, delete, check availability) and shares the common behavior. When a provider is added or removed, the station updates its Traefik routes and Authelia rules at runtime, adding only the routing and access that provider needs.
+
+**Result.** Customers reach their stations under their own domain names. Through customer-granted ngrok sessions, our team maintains stations remotely instead of travelling on site.
+
+## Observability for devices we can't see
+
+**Problem.** Our stations run on customer sites, and their data stays there. We only get access when a customer grants it for debugging or maintenance, so when something goes wrong, the customer is the first person who has to understand it, not us. When I joined, Loki had just been set up, but customers still had raw logs with no filtering or export and a few basic dashboards. Our support team mostly worked from logs and screenshots customers sent.
+
+**Design.** Because the data stays on the station, observability runs there too. I'm in charge of bringing new log sources into Loki in a consistent format. I built Grafana dashboards for container health and for the AI workload itself, such as the frame rate at which video is processed, and added log export to the station's web UI so customers can send support the relevant logs directly. When customers grant access, our support team works from the same views.
+
+**Next: LLM-assisted diagnosis.** I'm prototyping an MCP server that gives an AI assistant read-only access to a station's metrics (Prometheus), logs (Loki) and device API, so someone can ask about a station's state in plain language from their IDE or Claude instead of reading dashboards. It runs on the user's desktop today, and I'm exploring hosting it on the station itself. We'll use it internally first, to learn which questions really help before offering it to customers.
+
+**What's next.** With customer agreement, we're considering exporting a subset of metrics to the cloud so support can catch problems earlier.
+
+## Stack
+
+<StackGroups groups={frontmatter.stack} />

@@ -1,0 +1,21 @@
+---
+// A case study's Stack section, in the same rows as the resume's Technical
+// skills: the group on the left, its technologies on the right.
+import SkillRow from './SkillRow.astro';
+
+interface Props {
+  groups: Array<{ group: string; items: string[] }>;
+}
+
+const { groups } = Astro.props;
+---
+
+{
+  groups.length > 0 && (
+    <ul class="not-prose">
+      {groups.map(({ group, items }) => (
+        <SkillRow category={group} technologies={items.join(', ')} />
+      ))}
+    </ul>
+  )
+}
